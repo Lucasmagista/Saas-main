@@ -54,7 +54,7 @@ interface Bot {
   source: string;
   lastRun: string;
   totalRuns: number;
-  config: Record<string, any>;
+  config: Record<string, string | number | boolean | string[]>;
   files: string[];
   dependencies: string[];
   entryPoint: string;
@@ -572,6 +572,8 @@ export function BotManagement() {
                   multiple
                   className="hidden"
                   onChange={handleFileSelect}
+                  placeholder="Selecione os arquivos do bot"
+                  title="Selecione os arquivos do bot"
                 />
               </div>
             </TabsContent>

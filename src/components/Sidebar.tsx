@@ -211,35 +211,30 @@ const Sidebar = () => {
       "flex h-screen flex-col border-r bg-background transition-all duration-300",
       collapsed ? "w-16" : "w-64"
     )}>
-      {/* Header */}
-      <div className="flex h-14 items-center justify-between px-4 border-b">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            {companySettings.logo ? (
-              <img 
-                src={companySettings.logo} 
-                alt="Logo" 
-                className="h-8 w-8 rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Bot className="h-4 w-4" />
-              </div>
-            )}
-            <span className="font-bold">
-              {companySettings.name || 'DASHBOARD PRO'}
-            </span>
-          </div>
+  {/* Header */}
+  <div className="flex h-14 items-center justify-between px-4 border-b">
+    {!collapsed && (
+      <div className="flex items-center gap-2">
+        {companySettings.logo ? (
+          <img 
+            src={companySettings.logo} 
+            alt="Logo" 
+            className="h-8 w-8 rounded-lg object-cover"
+          />
+        ) : (
+          <span className="font-bold text-lg">{companySettings.name || "CRM Pro"}</span>
         )}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={() => setCollapsed(!collapsed)} 
-          className="h-8 w-8 p-0"
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
       </div>
+    )}
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setCollapsed(!collapsed)}
+      aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+    >
+      {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+    </Button>
+  </div>
 
       {/* Navigation */}
       <div className="flex-1 overflow-auto py-4">

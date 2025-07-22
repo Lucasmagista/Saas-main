@@ -292,6 +292,7 @@ const Sidebar = () => {
 
           {/* User Section aprimorado */}
           <UserSection />
+          {/* Removido seletor de idioma da Sidebar. A troca de idioma será feita nas configurações. */}
         </nav>
       </div>
 

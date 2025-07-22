@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import i18n from '@/lib/i18n';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
@@ -116,7 +117,10 @@ const Settings = () => {
       open: true,
       title: "Salvar Configurações Gerais",
       description: "Tem certeza que deseja salvar as alterações nas configurações gerais?",
-      action: () => saveGeneralSettings(localGeneralSettings)
+      action: () => {
+        saveGeneralSettings(localGeneralSettings);
+        i18n.changeLanguage(localGeneralSettings.language);
+      }
     });
   };
 
@@ -417,7 +421,10 @@ const Settings = () => {
                       <Label>Idioma</Label>
                       <Select 
                         value={localGeneralSettings.language}
-                        onValueChange={(value) => setLocalGeneralSettings(prev => ({ ...prev, language: value }))}
+                        onValueChange={(value) => {
+                          setLocalGeneralSettings(prev => ({ ...prev, language: value }));
+                          i18n.changeLanguage(value);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue />

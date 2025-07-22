@@ -14,4 +14,17 @@ const Login = () => {
   );
 };
 
+function useTranslation(): { t: (key: string) => string } {
+  const translations: Record<string, string> = {
+    login: 'Login',
+    loginDescription: 'Please enter your credentials to log in.',
+    // Add more keys as needed
+  };
+
+  return {
+    t: (key: string) => translations[key] || key,
+  };
+}
+
 export default Login;
+

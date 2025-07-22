@@ -162,6 +162,7 @@ const Integrations = () => {
                       type="checkbox" 
                       checked={globalConfig.autoSync}
                       onChange={(e) => setGlobalConfig({...globalConfig, autoSync: e.target.checked})}
+                      title="Sincronização Automática"
                     />
                   </div>
                   
@@ -174,6 +175,7 @@ const Integrations = () => {
                       type="checkbox" 
                       checked={globalConfig.enableWebhooks}
                       onChange={(e) => setGlobalConfig({...globalConfig, enableWebhooks: e.target.checked})}
+                      title="Webhooks Globais"
                     />
                   </div>
                   
@@ -186,6 +188,7 @@ const Integrations = () => {
                       type="checkbox" 
                       checked={globalConfig.enableLogs}
                       onChange={(e) => setGlobalConfig({...globalConfig, enableLogs: e.target.checked})}
+                      title="Logs Detalhados"
                     />
                   </div>
                   
@@ -198,6 +201,8 @@ const Integrations = () => {
                       type="checkbox" 
                       checked={globalConfig.enableMetrics}
                       onChange={(e) => setGlobalConfig({...globalConfig, enableMetrics: e.target.checked})}
+                      title="Métricas em Tempo Real"
+                      placeholder="Ativar métricas"
                     />
                   </div>
                   

@@ -1,3 +1,14 @@
+// Lista fixa de cargos permitidos (apenas os definidos pelo usuário)
+const allowedRoles = [
+  "CEO",
+  "ADMIN",
+  "FINANCEIRO",
+  "RH",
+  "COMPRAS",
+  "COMERCIAL",
+  "ASSISTENCIA",
+  "RECEPÇÂO"
+];
 
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +21,29 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Plus, Search, Filter, Mail, Phone, MapPin, Users, Star, Award } from "lucide-react";
 
+type MemberType = {
+  id: number;
+  name: string;
+  role: string;
+  department: string;
+  email: string;
+  phone: string;
+  location: string;
+  avatar: string;
+  status: string;
+  joinDate: string;
+  projects: number;
+  completedTasks: number;
+  totalTasks: number;
+  rating: number;
+  skills: string[];
+};
+
 const Team = () => {
+  // Estado para modal de edição completa
+  const [editUserModal, setEditUserModal] = useState<{ open: boolean; member: MemberType | null }>({ open: false, member: null });
+  // Estado para modal de mensagem
+  const [messageModal, setMessageModal] = useState<{ open: boolean; member: MemberType | null }>({ open: false, member: null });
   const [searchTerm, setSearchTerm] = useState("");
   const [editMemberId, setEditMemberId] = useState<string | null>(null);
   const [newRole, setNewRole] = useState("");
@@ -27,8 +60,8 @@ const Team = () => {
     {
       id: 1,
       name: "Ana Silva",
-      role: "Product Manager",
-      department: "Produto",
+      role: "CEO",
+      department: "Diretoria",
       email: "ana.silva@empresa.com",
       phone: "+55 11 99999-1234",
       location: "São Paulo, SP",
@@ -44,8 +77,8 @@ const Team = () => {
     {
       id: 2,
       name: "Carlos Santos",
-      role: "Senior Developer",
-      department: "Desenvolvimento",
+      role: "ADMIN",
+      department: "Administrativo",
       email: "carlos.santos@empresa.com",
       phone: "+55 11 99999-5678",
       location: "Rio de Janeiro, RJ",
@@ -56,13 +89,13 @@ const Team = () => {
       completedTasks: 238,
       totalTasks: 255,
       rating: 4.9,
-      skills: ["React", "Node.js", "TypeScript", "AWS"]
+      skills: ["Organização", "Gestão", "Processos", "Compliance"]
     },
     {
       id: 3,
       name: "Maria Costa",
-      role: "UX Designer",
-      department: "Design",
+      role: "FINANCEIRO",
+      department: "Financeiro",
       email: "maria.costa@empresa.com",
       phone: "+55 21 99999-9012",
       location: "Belo Horizonte, MG",
@@ -73,13 +106,13 @@ const Team = () => {
       completedTasks: 89,
       totalTasks: 98,
       rating: 4.7,
-      skills: ["Figma", "Design Systems", "Prototipagem", "User Research"]
+      skills: ["Contabilidade", "Gestão Financeira", "Orçamento", "Auditoria"]
     },
     {
       id: 4,
       name: "João Oliveira",
-      role: "Marketing Specialist",
-      department: "Marketing",
+      role: "RH",
+      department: "Recursos Humanos",
       email: "joao.oliveira@empresa.com",
       phone: "+55 31 99999-3456",
       location: "Porto Alegre, RS",
@@ -90,13 +123,13 @@ const Team = () => {
       completedTasks: 76,
       totalTasks: 82,
       rating: 4.6,
-      skills: ["Digital Marketing", "SEO", "Google Ads", "Analytics"]
+      skills: ["Recrutamento", "Treinamento", "Gestão de Pessoas", "Benefícios"]
     },
     {
       id: 5,
       name: "Lucia Ferreira",
-      role: "Sales Manager",
-      department: "Vendas",
+      role: "COMPRAS",
+      department: "Compras",
       email: "lucia.ferreira@empresa.com",
       phone: "+55 51 99999-7890",
       location: "Curitiba, PR",
@@ -107,13 +140,13 @@ const Team = () => {
       completedTasks: 324,
       totalTasks: 340,
       rating: 4.9,
-      skills: ["Vendas B2B", "CRM", "Negociação", "Gestão de Equipe"]
+      skills: ["Negociação", "Gestão de Fornecedores", "Logística", "Controle de Estoque"]
     },
     {
       id: 6,
       name: "Rafael Lima",
-      role: "DevOps Engineer",
-      department: "Desenvolvimento",
+      role: "COMERCIAL",
+      department: "Comercial",
       email: "rafael.lima@empresa.com",
       phone: "+55 41 99999-2468",
       location: "Florianópolis, SC",
@@ -124,7 +157,41 @@ const Team = () => {
       completedTasks: 198,
       totalTasks: 215,
       rating: 4.8,
-      skills: ["Docker", "Kubernetes", "AWS", "CI/CD"]
+      skills: ["Vendas", "Relacionamento", "CRM", "Prospecção"]
+    },
+    {
+      id: 7,
+      name: "Juliana Souza",
+      role: "ASSISTENCIA",
+      department: "Assistência",
+      email: "juliana.souza@empresa.com",
+      phone: "+55 21 99999-1122",
+      location: "Brasília, DF",
+      avatar: "/placeholder.svg",
+      status: "Ativo",
+      joinDate: "2024-02-10",
+      projects: 3,
+      completedTasks: 45,
+      totalTasks: 50,
+      rating: 4.5,
+      skills: ["Atendimento", "Resolução de Problemas", "Empatia", "Comunicação"]
+    },
+    {
+      id: 8,
+      name: "Marcos Pereira",
+      role: "RECEPÇÂO",
+      department: "Recepção",
+      email: "marcos.pereira@empresa.com",
+      phone: "+55 11 99999-3344",
+      location: "São Paulo, SP",
+      avatar: "/placeholder.svg",
+      status: "Ativo",
+      joinDate: "2023-08-01",
+      projects: 2,
+      completedTasks: 30,
+      totalTasks: 32,
+      rating: 4.4,
+      skills: ["Recepção", "Organização", "Comunicação", "Agilidade"]
     }
   ];
 
@@ -355,25 +422,97 @@ const Team = () => {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      Ver Perfil
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditUserModal({ open: true, member })}>
+                      Editar Usuário
                     </Button>
-                    <Button size="sm" className="flex-1">
+                    <Button size="sm" className="flex-1" onClick={() => setMessageModal({ open: true, member })}>
                       Mensagem
                     </Button>
                   </div>
+      {/* Modal de edição completa de usuário */}
+      {editUserModal.open && editUserModal.member && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-2">Editar Usuário</h2>
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-full mb-2"
+              value={editUserModal.member.name}
+              onChange={e => setEditUserModal({ ...editUserModal, member: { ...editUserModal.member, name: e.target.value } })}
+              placeholder="Nome"
+            />
+            <input
+              type="email"
+              className="border rounded px-2 py-1 w-full mb-2"
+              value={editUserModal.member.email}
+              onChange={e => setEditUserModal({ ...editUserModal, member: { ...editUserModal.member, email: e.target.value } })}
+              placeholder="Email"
+            />
+            <select
+              className="border rounded px-2 py-1 w-full mb-2"
+              value={editUserModal.member.role}
+              onChange={e => setEditUserModal({ ...editUserModal, member: { ...editUserModal.member, role: e.target.value } })}
+              title="Cargo do usuário"
+            >
+              <option value="">Selecione o cargo</option>
+              {allowedRoles.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              className="border rounded px-2 py-1 w-full mb-2"
+              value={editUserModal.member.department}
+              onChange={e => setEditUserModal({ ...editUserModal, member: { ...editUserModal.member, department: e.target.value } })}
+              placeholder="Departamento"
+            />
+            <div className="flex gap-2 justify-end mt-2">
+              <Button variant="outline" size="sm" onClick={() => setEditUserModal({ open: false, member: null })}>Cancelar</Button>
+              <Button size="sm" onClick={async () => {
+                // Aqui você integraria com backend para salvar edição
+                setEditUserModal({ open: false, member: null });
+              }}>Salvar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de mensagem para usuário */}
+      {messageModal.open && messageModal.member && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <h2 className="text-lg font-bold mb-2">Enviar mensagem para {messageModal.member.name}</h2>
+            <textarea
+              className="border rounded px-2 py-1 w-full mb-3"
+              rows={4}
+              placeholder="Digite sua mensagem..."
+            />
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setMessageModal({ open: false, member: null })}>Cancelar</Button>
+              <Button size="sm" onClick={() => {
+                // Aqui você integraria com backend para enviar mensagem
+                setMessageModal({ open: false, member: null });
+              }}>Enviar</Button>
+            </div>
+          </div>
+        </div>
+      )}
                   {/* Modal de edição de cargo */}
                   {isAdmin && editMemberId === member.id.toString() && (
                     <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
                       <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-xs">
                         <h2 className="text-lg font-bold mb-2">Editar cargo de {member.name}</h2>
-                        <input
-                          type="text"
+                        <select
                           className="border rounded px-2 py-1 w-full mb-3"
                           value={newRole}
                           onChange={e => setNewRole(e.target.value)}
-                          placeholder="Novo cargo"
-                        />
+                          title="Cargo do usuário"
+                        >
+                          <option value="">Selecione o cargo</option>
+                          {allowedRoles.map(role => (
+                            <option key={role} value={role}>{role}</option>
+                          ))}
+                        </select>
                         <div className="flex gap-2 justify-end">
                           <Button variant="outline" size="sm" onClick={() => setEditMemberId(null)}>Cancelar</Button>
                           <Button size="sm" onClick={async () => {
@@ -404,13 +543,17 @@ const Team = () => {
               onChange={e => setNewUser({ ...newUser, email: e.target.value })}
               placeholder="Email"
             />
-            <input
-              type="text"
+            <select
               className="border rounded px-2 py-1 w-full mb-2"
               value={newUser.role}
               onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-              placeholder="Cargo"
-            />
+              title="Cargo do novo usuário"
+            >
+              <option value="">Selecione o cargo</option>
+              {allowedRoles.map(role => (
+                <option key={role} value={role}>{role}</option>
+              ))}
+            </select>
             <input
               type="text"
               className="border rounded px-2 py-1 w-full mb-3"

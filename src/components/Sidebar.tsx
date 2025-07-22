@@ -16,7 +16,7 @@ const Sidebar = () => {
 
   const mainNavItems = [{
     title: "Dashboard",
-    href: "/",
+    href: "/dashboard",
     icon: LayoutDashboard,
     badge: null
   }, {
@@ -93,11 +93,21 @@ const Sidebar = () => {
   }];
 
   // Usuário
-  // Apenas uma opção de usuário, sem duplicidade
+  // Define rota de perfil conforme tipo de usuário usando profile.position
+  let userProfileHref = "/profile";
+  let userTitle = "Usuário";
+  if (profile?.position === "admin" || profile?.position === "super_admin") {
+    userProfileHref = "/admin-profile";
+    userTitle = "Admin";
+  } else if (profile?.position === "manager") {
+    userProfileHref = "/manager-profile";
+    userTitle = "Manager";
+  }
+
   const userNavItems = [
     {
-      title: "Usuário",
-      href: "/profile",
+      title: userTitle,
+      href: userProfileHref,
       icon: UserCircle,
       badge: null
     }

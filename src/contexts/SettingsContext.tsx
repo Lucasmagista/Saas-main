@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { CompanySettings, GeneralSettings } from '@/hooks/useSettings';
 
 interface CustomizationSettings {
@@ -89,58 +89,95 @@ const getSystemTheme = () => {
 };
 
 export const SettingsProvider = ({ children }: SettingsProviderProps) => {
-  const [companySettings, setCompanySettings] = useState<CompanySettings>({
-    name: 'SaaS Pro Enterprise',
-    cnpj: '12.345.678/0001-90',
-    industry: 'Tecnologia',
-    size: '51-200',
-    founded: '2020',
-    revenue: 'R$ 5-10M',
-    address: 'Av. Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100',
-    description: 'Empresa líder em soluções SaaS para gestão empresarial, oferecendo ferramentas integradas para aumentar a produtividade e eficiência dos negócios.',
-    timezone: 'America/Sao_Paulo'
+  const [companySettings, setCompanySettings] = useState<CompanySettings>(() => {
+    const saved = localStorage.getItem('company-settings');
+    if (saved) return JSON.parse(saved);
+    return {
+      name: 'SaaS Pro Enterprise',
+      cnpj: '12.345.678/0001-90',
+      industry: 'Tecnologia',
+      size: '51-200',
+      founded: '2020',
+      revenue: 'R$ 5-10M',
+      address: 'Av. Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100',
+      description: 'Empresa líder em soluções SaaS para gestão empresarial, oferecendo ferramentas integradas para aumentar a produtividade e eficiência dos negócios.',
+      logo: '',
+      timezone: 'America/Sao_Paulo'
+    };
   });
 
-  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
-    language: 'pt-BR',
-    currency: 'BRL',
-    dateFormat: 'dd/MM/yyyy',
-    timeFormat: '24h',
-    autoBackup: true,
-    backupFrequency: 'daily'
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(() => {
+    const saved = localStorage.getItem('general-settings');
+    if (saved) return JSON.parse(saved);
+    return {
+      language: 'pt-BR',
+      currency: 'BRL',
+      dateFormat: 'dd/MM/yyyy',
+      timeFormat: '24h',
+      autoBackup: true,
+      backupFrequency: 'daily'
+    };
   });
 
-  const [customizationSettings, setCustomizationSettings] = useState<CustomizationSettings>({
-    theme: 'light',
-    primaryColor: '#3B82F6',
-    secondaryColor: '#10B981',
-    accentColor: '#F59E0B',
-    fontFamily: 'Inter',
-    fontSize: 'medium',
-    borderRadius: 'medium',
-    animation: 'smooth',
-    sidebar: {
-      position: 'left',
-      style: 'modern',
-      collapsed: false
-    },
-    header: {
-      style: 'minimal',
-      showBreadcrumb: true,
-      showSearch: true
-    },
-    dashboard: {
-      layout: 'grid',
-      cardStyle: 'elevated',
-      showWelcome: true
-    },
-    branding: {
-      showLogo: true,
-      showCompanyName: true,
-      footerText: 'Powered by SaaS Pro',
-      customCSS: ''
+  const [customizationSettings, setCustomizationSettings] = useState<CustomizationSettings>(() => {
+    const saved = localStorage.getItem('customization-settings');
+    if (saved) return JSON.parse(saved);
+    return {
+      theme: 'light',
+      primaryColor: '#3B82F6',
+      secondaryColor: '#10B981',
+      accentColor: '#F59E0B',
+      fontFamily: 'Inter',
+      fontSize: 'medium',
+      borderRadius: 'medium',
+      animation: 'smooth',
+      sidebar: {
+        position: 'left',
+        style: 'modern',
+        collapsed: false
+      },
+      header: {
+        style: 'minimal',
+        showBreadcrumb: true,
+        showSearch: true
+      },
+      dashboard: {
+        layout: 'grid',
+        cardStyle: 'elevated',
+        showWelcome: true
+      },
+      branding: {
+        showLogo: true,
+        showCompanyName: true,
+        footerText: 'Powered by SaaS Pro',
+        customCSS: ''
+      }
+    };
+  });
+
+  const updateCompanySettings = (settings: CompanySettings) => {
+    setCompanySettings(settings);
+    localStorage.setItem('company-settings', JSON.stringify(settings));
+    if (settings.name) {
+      document.title = `${settings.name} - Dashboard`;
     }
-  });
+  };
+
+  const updateGeneralSettings = (settings: GeneralSettings) => {
+    setGeneralSettings(settings);
+    localStorage.setItem('general-settings', JSON.stringify(settings));
+    if (settings.language) {
+      document.documentElement.lang = settings.language;
+    }
+  };
+
+  const updateCustomizationSettings = (settings: CustomizationSettings) => {
+    setCustomizationSettings(settings);
+    localStorage.setItem('customization-settings', JSON.stringify(settings));
+    applyCustomization(settings);
+  };
+
+  // ...existing code...
 
   // Função para aplicar personalização
   const applyCustomization = (settings: CustomizationSettings) => {
@@ -217,56 +254,22 @@ export const SettingsProvider = ({ children }: SettingsProviderProps) => {
 
   // Carregar configurações do localStorage na inicialização
   useEffect(() => {
-    const savedSettings = localStorage.getItem('customization-settings');
-    if (savedSettings) {
-      const parsedSettings = JSON.parse(savedSettings);
-      setCustomizationSettings(parsedSettings);
-      applyCustomization(parsedSettings);
-    } else {
-      applyCustomization(customizationSettings);
-    }
+    applyCustomization(customizationSettings);
+    document.documentElement.lang = generalSettings.language;
+  }, [customizationSettings, generalSettings.language]);
 
-    // Listener para mudanças no tema do sistema
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleSystemThemeChange = () => {
-      if (customizationSettings.theme === 'system') {
-        applyCustomization(customizationSettings);
-      }
-    };
-    
-    mediaQuery.addEventListener('change', handleSystemThemeChange);
-    return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
-  }, []);
-
-  const updateCompanySettings = (settings: CompanySettings) => {
-    setCompanySettings(settings);
-    if (settings.name) {
-      document.title = `${settings.name} - Dashboard`;
-    }
-  };
-
-  const updateGeneralSettings = (settings: GeneralSettings) => {
-    setGeneralSettings(settings);
-    if (settings.language) {
-      document.documentElement.lang = settings.language;
-    }
-  };
-
-  const updateCustomizationSettings = (settings: CustomizationSettings) => {
-    setCustomizationSettings(settings);
-    applyCustomization(settings);
-  };
+  const contextValue = useMemo(() => ({
+    companySettings,
+    generalSettings,
+    customizationSettings,
+    updateCompanySettings,
+    updateGeneralSettings,
+    updateCustomizationSettings,
+    applyCustomization
+  }), [companySettings, generalSettings, customizationSettings]);
 
   return (
-    <SettingsContext.Provider value={{
-      companySettings,
-      generalSettings,
-      customizationSettings,
-      updateCompanySettings,
-      updateGeneralSettings,
-      updateCustomizationSettings,
-      applyCustomization
-    }}>
+    <SettingsContext.Provider value={contextValue}>
       {children}
     </SettingsContext.Provider>
   );

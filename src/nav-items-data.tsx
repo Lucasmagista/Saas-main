@@ -1,4 +1,3 @@
-
 import { HomeIcon, Users, BarChart3, Settings, MessageSquare, Building2, Shield, Bell, BookOpen, Zap, Server, Target, HelpCircle, Briefcase, UserCheck, CreditCard, FileText, TrendingUp, Globe, Cog, Eye } from "lucide-react";
 import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
@@ -178,38 +177,3 @@ export const navItems = [
     page: <SettingsPage />,
   },
 ];
-
-// Componente de navegação principal com abrir/fechar tela
-import React, { useState } from "react";
-
-export function MainNavigation() {
-  const [selectedNav, setSelectedNav] = useState(null);
-
-  const handleNavClick = (item) => {
-    if (selectedNav && selectedNav.to === item.to) {
-      setSelectedNav(null); // Fecha a tela se clicar novamente
-    } else {
-      setSelectedNav(item);
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      <nav className="flex gap-2 p-4 border-b bg-white">
-        {navItems.map(item => (
-          <button
-            key={item.to}
-            className={`flex items-center gap-2 px-4 py-2 rounded transition-all font-medium ${selectedNav && selectedNav.to === item.to ? "bg-blue-100 text-blue-700" : "hover:bg-slate-100 text-slate-700"}`}
-            onClick={() => handleNavClick(item)}
-          >
-            {item.icon}
-            <span>{item.title}</span>
-          </button>
-        ))}
-      </nav>
-      <div className="flex-1">
-        {selectedNav ? selectedNav.page : <Index />}
-      </div>
-    </div>
-  );
-}

@@ -39,7 +39,7 @@ import { useSettingsContext } from "@/contexts/SettingsContext";
 
 const Settings = () => {
   const { toast } = useToast();
-  const { companySettings, generalSettings } = useSettingsContext();
+  const { companySettings, generalSettings, updateCompanySettings } = useSettingsContext();
   const {
     history,
     loading,
@@ -104,7 +104,10 @@ const Settings = () => {
       open: true,
       title: "Salvar Informações da Empresa",
       description: "Tem certeza que deseja salvar as alterações nas informações da empresa?",
-      action: () => saveCompanySettings(localCompanySettings)
+      action: () => {
+        saveCompanySettings(localCompanySettings);
+        updateCompanySettings(localCompanySettings); // Atualiza contexto global imediatamente
+      }
     });
   };
 

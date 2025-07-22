@@ -1,11 +1,19 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useSettingsContext } from "@/contexts/SettingsContext";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
+  const { companySettings } = useSettingsContext();
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className={cn("flex flex-col items-center justify-center", "opacity-30")}> 
+        {companySettings.logo ? (
+          <img src={companySettings.logo} alt="Logo" className="w-64 h-64 object-contain mb-4" />
+        ) : (
+          <div className="w-64 h-64 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-6xl font-bold mb-4">
+            SaaS
+          </div>
+        )}
+        <span className="text-2xl font-bold text-muted-foreground"> Empresa {companySettings.name || "SaaS Pro Enterprise"}</span>
       </div>
     </div>
   );

@@ -42,8 +42,10 @@ export const CustomizationSettings = () => {
   const [loading, setLoading] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [customization, setCustomization] = useState(customizationSettings);
-  const [undoStack, setUndoStack] = useState<any[]>([]);
-  const [redoStack, setRedoStack] = useState<any[]>([]);
+  type CustomizationType = typeof customizationSettings;
+
+  const [undoStack, setUndoStack] = useState<CustomizationType[]>([]);
+  const [redoStack, setRedoStack] = useState<CustomizationType[]>([]);
 
   // Sincronizar com o contexto
   useEffect(() => {
@@ -250,6 +252,8 @@ export const CustomizationSettings = () => {
                   accept=".json"
                   onChange={importSettings}
                   className="hidden"
+                  title="Importar configurações"
+                  placeholder="Selecione um arquivo JSON"
                 />
                 <Button variant="outline" size="sm" asChild>
                   <span>

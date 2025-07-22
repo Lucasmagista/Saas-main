@@ -1,12 +1,14 @@
 
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { RegisterForm } from '@/components/auth/RegisterForm';
+import { useTranslation } from 'react-i18next';
 
 const Register = () => {
+  const { t } = useTranslation();
   return (
     <AuthLayout
-      title="Criar Conta"
-      description="Crie sua conta para começar a usar o sistema"
+      title={t('register')}
+      description={t('registerDescription')}
     >
       <RegisterForm />
     </AuthLayout>

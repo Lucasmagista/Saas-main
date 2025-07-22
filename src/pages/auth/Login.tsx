@@ -3,10 +3,11 @@ import { AuthLayout } from '@/components/auth/AuthLayout';
 import { LoginForm } from '@/components/auth/LoginForm';
 
 const Login = () => {
+  const { t } = useTranslation();
   return (
     <AuthLayout
-      title="Entrar"
-      description="Entre na sua conta para acessar o sistema"
+      title={t('login')}
+      description={t('loginDescription')}
     >
       <LoginForm />
     </AuthLayout>

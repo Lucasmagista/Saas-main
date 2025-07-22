@@ -11,6 +11,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import ForgotPassword from "./pages/auth/ForgotPassword";
+import LanguageSwitcher from './components/ui/LanguageSwitcher';
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => {
   
   return (
     <QueryClientProvider client={queryClient}>
+      <LanguageSwitcher />
       <TooltipProvider>
         <Toaster />
         <Sonner />

@@ -8,39 +8,42 @@ import { LayoutDashboard, FolderKanban, BarChart3, Users, Settings, UserCircle, 
 import { useSettingsContext } from "@/contexts/SettingsContext";
 import { useAuth } from "@/hooks/useAuth";
 
+import { useTranslation } from 'react-i18next';
+
 const Sidebar = () => {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { companySettings } = useSettingsContext();
   const { user, profile, signOut } = useAuth();
 
   const mainNavItems = [{
-    title: "Dashboard",
+    title: t('dashboard'),
     href: "/dashboard",
     icon: LayoutDashboard,
     badge: null
   }, {
-    title: "Projetos",
+    title: t('projects'),
     href: "/projects",
     icon: FolderKanban,
     badge: "12"
   }, {
-    title: "Analytics",
+    title: t('analytics'),
     href: "/analytics",
     icon: BarChart3,
     badge: null
   }, {
-    title: "Equipe",
+    title: t('team'),
     href: "/team",
     icon: Users,
     badge: "30"
   }, {
-    title: "RH & Pessoas",
+    title: t('hr'),
     href: "/hr",
     icon: Users,
     badge: "89"
   }, {
-    title: "Clientes",
+    title: t('customers'),
     href: "/customers",
     icon: UserCircle,
     badge: "418"

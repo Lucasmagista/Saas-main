@@ -1,12 +1,14 @@
 
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
+import { useTranslation } from 'react-i18next';
 
 const ForgotPassword = () => {
+  const { t } = useTranslation();
   return (
     <AuthLayout
-      title="Recuperar Senha"
-      description="Digite seu email para receber as instruções de recuperação"
+      title={t('forgotPassword')}
+      description={t('forgotPasswordDescription')}
     >
       <ForgotPasswordForm />
     </AuthLayout>

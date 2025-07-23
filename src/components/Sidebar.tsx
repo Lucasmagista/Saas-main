@@ -17,103 +17,46 @@ const Sidebar = () => {
   const { companySettings } = useSettingsContext();
   const { user, profile, signOut } = useAuth();
 
-  const mainNavItems = [{
-    title: t('dashboard'),
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    badge: null
-  }, {
-    title: t('projects'),
-    href: "/projects",
-    icon: FolderKanban,
-    badge: "12"
-  }, {
-    title: t('analytics'),
-    href: "/analytics",
-    icon: BarChart3,
-    badge: null
-  }, {
-    title: t('team'),
-    href: "/team",
-    icon: Users,
-    badge: "30"
-  }, {
-    title: t('hr'),
-    href: "/hr",
-    icon: Users,
-    badge: "89"
-  }, {
-    title: t('customers'),
-    href: "/customers",
-    icon: UserCircle,
-    badge: "418"
-  }];
+  const mainNavItems = [
+    { title: t('dashboard'), href: "/dashboard", icon: LayoutDashboard, badge: null },
+    { title: t('projects'), href: "/projects", icon: FolderKanban, badge: "12" },
+    { title: t('analytics'), href: "/analytics", icon: BarChart3, badge: null },
+    { title: t('team'), href: "/team", icon: Users, badge: "30" },
+    { title: t('hr'), href: "/hr", icon: Users, badge: "89" },
+    { title: t('customers'), href: "/customers", icon: UserCircle, badge: "418" }
+  ];
 
-  const businessNavItems = [{
-    title: "Comunicação",
-    href: "/communication",
-    icon: MessageSquare,
-    badge: "15"
-  }, {
-    title: "Multi-Sessões",
-    href: "/multi-sessions",
-    icon: Bot,
-    badge: "4"
-  }, {
-    title: "Automação",
-    href: "/automation",
-    icon: Zap,
-    badge: "12"
-  }, {
-    title: "Relatórios",
-    href: "/reports",
-    icon: FileText,
-    badge: null
-  }, {
-    title: "Integrações",
-    href: "/integrations",
-    icon: LinkIcon,
-    badge: "6"
-  }];
+  const businessNavItems = [
+    { title: t('communication'), href: "/communication", icon: MessageSquare, badge: "15" },
+    { title: t('multiSessions'), href: "/multi-sessions", icon: Bot, badge: "4" },
+    { title: t('automation'), href: "/automation", icon: Zap, badge: "12" },
+    { title: t('reports'), href: "/reports", icon: FileText, badge: null },
+    { title: t('integrations'), href: "/integrations", icon: LinkIcon, badge: "6" }
+  ];
 
-  const technicalNavItems = [{
-    title: "Features",
-    href: "/features",
-    icon: Cpu,
-    badge: "PWA"
-  }, {
-    title: "Documentação",
-    href: "/documentation",
-    icon: BookOpen,
-    badge: "NEW"
-  }];
+  const technicalNavItems = [
+    { title: t('features'), href: "/features", icon: Cpu, badge: "PWA" },
+    { title: t('documentation'), href: "/documentation", icon: BookOpen, badge: "NEW" }
+  ];
 
-  const systemNavItems = [{
-    title: "Configurações",
-    href: "/settings",
-    icon: Settings,
-    badge: null
-  }];
+  const systemNavItems = [
+    { title: t('settings'), href: "/settings", icon: Settings, badge: null }
+  ];
 
   // Usuário
   // Define rota de perfil conforme tipo de usuário usando profile.position
   let userProfileHref = "/profile";
-  let userTitle = "Usuário";
+  let userTitle = t('user');
   if (profile?.position === "admin" || profile?.position === "super_admin") {
     userProfileHref = "/admin-profile";
-    userTitle = "Admin";
+    userTitle = t('admin');
   } else if (profile?.position === "manager") {
     userProfileHref = "/manager-profile";
-    userTitle = "Manager";
+    userTitle = t('manager');
   }
 
   const userNavItems = [
-    {
-      title: userTitle,
-      href: userProfileHref,
-      icon: UserCircle,
-      badge: null
-    }
+    { title: userTitle, href: userProfileHref, icon: UserCircle, badge: null }
   ];
 
   // Menu de usuário aprimorado
@@ -219,11 +162,14 @@ const Sidebar = () => {
     {!collapsed && (
       <div className="flex items-center gap-2">
         {companySettings.logo ? (
-          <img 
-            src={companySettings.logo} 
-            alt="Logo" 
-            className="h-8 w-8 rounded-lg object-cover"
-          />
+          <>
+            <img 
+              src={companySettings.logo} 
+              alt="Logo" 
+              className="h-8 w-8 rounded-lg object-cover"
+            />
+            <span className="font-bold text-lg ml-2">{companySettings.name || "CRM Pro"}</span>
+          </>
         ) : (
           <span className="font-bold text-lg">{companySettings.name || "CRM Pro"}</span>
         )}
@@ -246,7 +192,7 @@ const Sidebar = () => {
           {!collapsed && (
             <div className="px-3 py-2">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Principal
+                {t('mainSection')}
               </h2>
             </div>
           )}
@@ -258,7 +204,7 @@ const Sidebar = () => {
           {!collapsed && (
             <div className="px-3 py-2">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Negócios
+                {t('businessSection')}
               </h2>
             </div>
           )}
@@ -270,7 +216,7 @@ const Sidebar = () => {
           {!collapsed && (
             <div className="px-3 py-2">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Técnico
+                {t('technicalSection')}
               </h2>
             </div>
           )}
@@ -282,7 +228,7 @@ const Sidebar = () => {
           {!collapsed && (
             <div className="px-3 py-2">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Sistema
+                {t('systemSection')}
               </h2>
             </div>
           )}

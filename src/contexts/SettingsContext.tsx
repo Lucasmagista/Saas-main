@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import i18n from '@/lib/i18n';
 import { CompanySettings, GeneralSettings } from '@/hooks/useSettings';
 
 interface CustomizationSettings {
@@ -168,6 +169,12 @@ export const SettingsProvider = ({ children }: SettingsProviderProps) => {
     localStorage.setItem('general-settings', JSON.stringify(settings));
     if (settings.language) {
       document.documentElement.lang = settings.language;
+      // Atualiza o idioma global do i18next
+      let lang = settings.language;
+      if (lang.startsWith('pt')) lang = 'pt';
+      else if (lang.startsWith('en')) lang = 'en';
+      else if (lang.startsWith('es')) lang = 'es';
+      i18n.changeLanguage(lang);
     }
   };
 

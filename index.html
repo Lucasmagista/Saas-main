@@ -1,0 +1,34 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SaaS Pro - Solução Empresarial Completa</title>
+    <meta name="description" content="SaaS Pro - Plataforma empresarial completa com dashboard executivo, gestão de projetos, analytics avançado e muito mais." />
+    <meta name="author" content="SaaS Pro Team" />
+
+    <meta property="og:title" content="SaaS Pro - Solução Empresarial Completa" />
+    <meta property="og:description" content="Plataforma empresarial completa com dashboard executivo, gestão de projetos, analytics avançado e muito mais." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@saaspro" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <!-- Carrega a biblioteca socket.io-client via CDN para habilitar comunicação em tempo real.
+         Esta importação global expõe a função `io` em window.io, utilizada no WhatsAppDashboard.
+         Versão 4.7.5 inclui melhorias de estabilidade e configurações avançadas.
+         Em ambientes de produção, considere empacotar socket.io-client via npm para melhor controle de versão. -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

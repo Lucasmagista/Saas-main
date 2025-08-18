@@ -1,0 +1,16 @@
+# Dockerfile para o serviço frontend da aplicação SaaS
+# Etapa de build: compila o aplicativo React com Vite
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+COPY vite.config.* ./
+COPY src ./src
+COPY public ./public
+RUN npm install
+RUN npm run build
+
+# Etapa final: servidor Nginx para servir arquivos estáticos
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

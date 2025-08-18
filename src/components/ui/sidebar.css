@@ -1,0 +1,36 @@
+/* Sidebar custom CSS variables */
+.sidebar-custom-vars {
+  --sidebar-width: 16rem;
+  --sidebar-width-mobile: 18rem;
+  --sidebar-width-icon: 3rem;
+}
+
+[data-sidebar="sidebar"] {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+[data-sidebar="sidebar"][data-state="collapsed"] {
+  width: var(--sidebar-width-icon);
+}
+
+[data-sidebar="sidebar"][data-state="expanded"] {
+  width: var(--sidebar-width);
+}
+
+/* Mobile sidebar styles */
+[data-sidebar="sidebar"][data-mobile="true"] {
+  width: var(--sidebar-width-mobile);
+}
+
+/* Sidebar animations */
+.sidebar-transition {
+  transition: width 0.3s ease;
+}
+
+/* Tooltip styles for collapsed sidebar */
+.sidebar-tooltip {
+  --sidebar-tooltip-background: hsl(var(--background));
+  --sidebar-tooltip-foreground: hsl(var(--foreground));
+  --sidebar-tooltip-border: hsl(var(--border));
+}

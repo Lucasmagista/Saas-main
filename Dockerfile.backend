@@ -1,0 +1,20 @@
+# Dockerfile para o serviço backend da aplicação SaaS
+FROM node:18-alpine
+
+# Diretório de trabalho da aplicação
+WORKDIR /app
+
+# Copia somente os arquivos necessários para o backend
+COPY package*.json ./
+COPY backend ./backend
+COPY supabase ./supabase
+COPY .env.example ./
+
+# Instala dependências de produção (caso deseje incluir dev use `npm install`)
+RUN npm install --omit=dev
+
+# Expõe a porta do backend (definida em .env via WPP_PORT)
+EXPOSE 3002
+
+# Comando para iniciar o servidor Express
+CMD ["node", "backend/index.cjs"]

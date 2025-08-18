@@ -1,0 +1,24 @@
+.progressContainer {
+  position: relative;
+  width: 96px; /* w-24 = 6rem = 96px */
+  height: 8px;
+  background-color: rgb(229 231 235); /* bg-gray-200 */
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 9999px;
+  transition: transform 0.3s ease-in-out;
+  transform-origin: left center;
+  transform: scaleX(var(--progress-scale, 0));
+}
+
+.progressBarBlue {
+  background-color: rgb(37 99 235); /* bg-blue-600 */
+}
+
+.progressBarGreen {
+  background-color: rgb(22 163 74); /* bg-green-600 */
+}

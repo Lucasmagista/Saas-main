@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint
+        run: |
+          if [ -f package.json ] && npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "Nenhum script de lint encontrado, ignorando."
+          fi
+
+      - name: Test
+        run: |
+          if [ -f package.json ] && npm run | grep -q "test"; then
+            npm test
+          else
+            echo "Nenhum script de testes encontrado, ignorando."
+          fi
+
+      - name: Build frontend
+        run: |
+          if [ -f package.json ] && npm run | grep -q "build"; then
+            npm run build
+          else
+            echo "Nenhum script de build encontrado, ignorando."
+          fi

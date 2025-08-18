@@ -1,0 +1,98 @@
+/* Estilos para componentes de cor */
+.colorCircle {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.colorSquare {
+  border-radius: 0.5rem;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.colorSquareMedium {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* Estilos básicos para componentes de cor */
+.colorPreview {
+  position: relative;
+  overflow: hidden;
+}
+
+.gradientPreview {
+  position: relative;
+  overflow: hidden;
+}
+
+.colorSquareLarge {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* Utility para cores dinâmicas usando CSS custom properties */
+.dynamicColor {
+  background-color: var(--dynamic-bg-color);
+}
+
+/* Estilos para preview de tipografia */
+.typographyPreview {
+  font-family: var(--preview-font-family, inherit);
+  font-size: var(--preview-font-size, inherit);
+  font-weight: var(--preview-font-weight, inherit);
+  line-height: var(--preview-line-height, inherit);
+  letter-spacing: var(--preview-letter-spacing, inherit);
+  color: var(--preview-text-color, inherit);
+}
+
+.mutedText {
+  color: var(--preview-muted-color, #6b7280);
+}
+
+/* Estilos para animações de preview */
+.animationPreview {
+  transition-duration: var(--preview-animation-duration, 0.3s);
+  transition-timing-function: var(--preview-animation-timing, ease-out);
+}
+
+.borderRadiusPreview {
+  border-radius: var(--preview-border-radius, 0.5rem);
+}
+
+/* Estilos para demonstrações de interação */
+.interactiveButton {
+  transition: all var(--preview-animation-duration, 0.3s) var(--preview-animation-timing, ease-out);
+}
+
+.interactiveButton.hoverEnabled:hover {
+  transform: scale(1.05);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.interactiveButton.clickEnabled:active {
+  transform: scale(0.95);
+}
+
+.interactiveCard {
+  transition: all var(--preview-animation-duration, 0.3s) var(--preview-animation-timing, ease-out);
+}
+
+.interactiveCard.hoverEnabled:hover {
+  background-color: var(--muted);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilos para preview card de tipografia */
+.typographyCard {
+  font-family: var(--preview-font-family, inherit);
+  font-size: var(--preview-font-size, inherit);
+  font-weight: var(--preview-font-weight, inherit);
+  line-height: var(--preview-line-height, inherit);
+  letter-spacing: var(--preview-letter-spacing, inherit);
+  color: var(--preview-text-color, inherit);
+  border-radius: var(--preview-border-radius, 0.5rem);
+}

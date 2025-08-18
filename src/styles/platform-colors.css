@@ -1,0 +1,24 @@
+/* Platform-specific colors */
+.platform-indicator-whatsapp {
+  background-color: #25D366;
+}
+
+.platform-indicator-telegram {
+  background-color: #0088cc;
+}
+
+.platform-indicator-discord {
+  background-color: #5865F2;
+}
+
+.platform-indicator-instagram {
+  background-color: #E4405F;
+}
+
+.platform-indicator-facebook {
+  background-color: #1877F2;
+}
+
+.platform-indicator-default {
+  background-color: #6b7280;
+}

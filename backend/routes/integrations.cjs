@@ -3,9 +3,12 @@ const router = express.Router();
 const logger = require('../logger.cjs');
 const { logAudit } = require('../auditHelper.cjs');
 const integrationsRepo = require('../repositories/integrationsRepository.cjs');
+const { createPaginationMiddleware } = require('../middleware/pagination.cjs');
+const { withETag } = require('../middleware/etag.cjs');
+const { idempotency } = require('../middleware/idempotency.cjs');
 
 // POST /api/integrations - Cria integração
-router.post('/', express.json(), async (req, res) => {
+router.post('/', idempotency(), express.json(), async (req, res) => {
   try {
     const integration = await integrationsRepo.insert(req.body);
     await logAudit({ req, action: 'create', resourceType: 'integration', resourceId: integration.id, newValues: integration });
@@ -45,14 +48,19 @@ router.delete('/:id', async (req, res) => {
 });
 
 // GET /api/integrations - Lista integrações
-router.get('/', async (req, res) => {
+router.get('/', createPaginationMiddleware(['name', 'created_at', 'updated_at']), withETag(async (req, res) => {
   try {
-    const data = await integrationsRepo.listAll();
-    res.json(data);
+    const db = require('../postgresClient.cjs');
+    const { limit, offset, orderBy, order } = res.locals.pagination;
+    const orderClause = orderBy ? ` ORDER BY ${orderBy} ${order.toUpperCase()}` : ' ORDER BY created_at DESC';
+    const total = await db.query('SELECT COUNT(1) AS count FROM integrations');
+    const result = await db.query(`SELECT * FROM integrations${orderClause} LIMIT $1 OFFSET $2`, [limit, offset]);
+    res.set('X-Total-Count', String(total.rows[0].count));
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
-});
+}));
 
 // POST /api/integrations - Cria integração
 router.post('/', express.json(), async (req, res) => {

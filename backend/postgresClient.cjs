@@ -13,6 +13,8 @@ const pool = new Pool({
   max: config.databasePoolSize, // Máximo de conexões no pool
   idleTimeoutMillis: config.databaseIdleTimeout, // Tempo máximo que uma conexão pode ficar ociosa
   connectionTimeoutMillis: 10000, // Tempo máximo para estabelecer conexão
+  statement_timeout: 15000,
+  query_timeout: 20000,
   ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
 });
 

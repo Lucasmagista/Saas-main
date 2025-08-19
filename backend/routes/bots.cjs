@@ -21,6 +21,9 @@ const botsRepo = require('../repositories/botsRepository.cjs');
 const botLogsRepo = require('../repositories/botLogsRepository.cjs');
 
 const router = express.Router();
+const { createPaginationMiddleware } = require('../middleware/pagination.cjs');
+const { withETag } = require('../middleware/etag.cjs');
+const { idempotency } = require('../middleware/idempotency.cjs');
 
 // Schemas de validação
 const createBotSchema = z.object({
@@ -225,18 +228,23 @@ async function scanRemoteRepo(repoUrl) {
 }
 
 // GET /bots - list bots from database
-router.get('/', async (req, res) => {
+router.get('/', createPaginationMiddleware(['name', 'created_at', 'updated_at']), withETag(async (req, res) => {
   try {
-    const data = await botsRepo.listAll();
-    res.json(data);
+    const { limit, offset, orderBy, order } = res.locals.pagination;
+    const orderClause = orderBy ? ` ORDER BY ${orderBy} ${order.toUpperCase()}` : ' ORDER BY created_at DESC';
+    const db = require('../postgresClient.cjs');
+    const total = await db.query('SELECT COUNT(1) AS count FROM bots');
+    const result = await db.query(`SELECT * FROM bots${orderClause} LIMIT $1 OFFSET $2`, [limit, offset]);
+    res.set('X-Total-Count', String(total.rows[0].count));
+    res.json(result.rows);
   } catch (error) {
     logger.error('Erro ao listar bots:', error);
     res.status(500).json({ error: error.message });
   }
-});
+}));
 
 // POST /bots - Cria bot diretamente
-router.post('/', upload.none(), validate({ body: createBotSchema }), async (req, res) => {
+router.post('/', idempotency(), upload.none(), validate({ body: createBotSchema }), async (req, res) => {
   try {
     const { name, type, config, description } = req.body;
     const bot = await botsRepo.insert({ name, type, config, description: description || null });

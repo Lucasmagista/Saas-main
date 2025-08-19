@@ -94,21 +94,15 @@ async function initializeServer() {
     app.use(express.json({ limit: '10mb' }));
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-    // Middleware de segurança
+    // Middleware de segurança + logging
+    const { securityHeaders } = require('./middleware/securityHeaders.cjs');
+    app.use(securityHeaders);
     app.use((req, res, next) => {
-      // Remover headers que podem expor informações
-      res.removeHeader('X-Powered-By');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('X-Frame-Options', 'DENY');
-      res.setHeader('X-XSS-Protection', '1; mode=block');
-      
-      // Log de requisições
       logger.info(`${req.method} ${req.url}`, { 
         ip: req.ip,
         userAgent: req.get('User-Agent'),
         timestamp: new Date().toISOString()
       });
-      
       next();
     });
 

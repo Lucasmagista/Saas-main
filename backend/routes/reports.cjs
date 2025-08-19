@@ -42,19 +42,26 @@ router.delete('/:id', async (req, res) => {
 const express = require('express');
 const router = express.Router();
 const db = require('../postgresClient.cjs');
+const { createPaginationMiddleware } = require('../middleware/pagination.cjs');
+const { withETag } = require('../middleware/etag.cjs');
+const { idempotency } = require('../middleware/idempotency.cjs');
 
 // GET /api/reports - Lista relatórios
-router.get('/', async (req, res) => {
+router.get('/', createPaginationMiddleware(['title', 'created_at', 'updated_at']), withETag(async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM reports ORDER BY created_at DESC');
+    const { limit, offset, orderBy, order } = res.locals.pagination;
+    const orderClause = orderBy ? ` ORDER BY ${orderBy} ${order.toUpperCase()}` : ' ORDER BY created_at DESC';
+    const total = await db.query('SELECT COUNT(1) AS count FROM reports');
+    const result = await db.query(`SELECT * FROM reports${orderClause} LIMIT $1 OFFSET $2`, [limit, offset]);
+    res.set('X-Total-Count', String(total.rows[0].count));
     res.json(result.rows);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
-});
+}));
 
 // POST /api/reports - Cria relatório
-router.post('/', express.json(), async (req, res) => {
+router.post('/', idempotency(), express.json(), async (req, res) => {
   try {
     const keys = Object.keys(req.body);
     const values = Object.values(req.body);

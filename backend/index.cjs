@@ -96,6 +96,8 @@ async function initializeServer() {
 
     // Middleware de segurança + logging
     const { securityHeaders } = require('./middleware/securityHeaders.cjs');
+    const { rateLimiters } = require('./middleware/rateLimit.cjs');
+    
     app.use(securityHeaders);
     app.use((req, res, next) => {
       logger.info(`${req.method} ${req.url}`, { 
@@ -105,6 +107,21 @@ async function initializeServer() {
       });
       next();
     });
+
+    // Rate limiting global
+    app.use('/api', rateLimiters.api);
+    
+    // Rate limiting específico para autenticação
+    app.use('/api/auth', rateLimiters.auth);
+    
+    // Rate limiting para webhooks
+    app.use('/api/webhooks', rateLimiters.webhook);
+    
+    // Rate limiting para criação de bots
+    app.use('/api/bots', rateLimiters.botCreation);
+    
+    // Rate limiting para uploads
+    app.use('/api/upload', rateLimiters.upload);
 
     // Supabase removido: nenhuma inicialização necessária aqui
 

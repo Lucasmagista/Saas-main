@@ -1,27 +1,32 @@
-// Repositório para acesso à tabela 'customers' no Supabase
-const supabase = require('../supabaseClient.cjs');
+// Repositório para acesso à tabela 'customers' no PostgreSQL local
+// Repositório para acesso à tabela 'customers' no PostgreSQL local
+const db = require('../postgresClient.cjs');
 
 async function listAll() {
-  const { data, error } = await supabase.from('customers').select('*');
-  if (error) throw new Error(error.message);
-  return data || [];
+  const result = await db.query('SELECT * FROM customers');
+  return result.rows;
 }
 
 async function insert(payload) {
-  const { data, error } = await supabase.from('customers').insert([payload]).select().single();
-  if (error) throw new Error(error.message);
-  return data;
+  const keys = Object.keys(payload);
+  const values = Object.values(payload);
+  const params = keys.map((_, i) => `$${i + 1}`).join(', ');
+  const query = `INSERT INTO customers (${keys.join(', ')}) VALUES (${params}) RETURNING *`;
+  const result = await db.query(query, values);
+  return result.rows[0];
 }
 
 async function update(id, updatedFields) {
-  const { data, error } = await supabase.from('customers').update(updatedFields).eq('id', id).select().single();
-  if (error) throw new Error(error.message);
-  return data;
+  const keys = Object.keys(updatedFields);
+  const values = Object.values(updatedFields);
+  const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+  const query = `UPDATE customers SET ${setString} WHERE id = $${keys.length + 1} RETURNING *`;
+  const result = await db.query(query, [...values, id]);
+  return result.rows[0];
 }
 
 async function remove(id) {
-  const { error } = await supabase.from('customers').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await db.query('DELETE FROM customers WHERE id = $1', [id]);
   return { success: true };
 }
 

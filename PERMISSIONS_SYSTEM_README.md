@@ -19,7 +19,7 @@ Este documento descreve as implementações realizadas para criar um sistema com
 - ✅ Ações em lote para permissões por módulo
 
 ### 3. **Dados Reais (Sem Mock)**
-- ✅ Integração completa com Supabase
+-- ✅ Integração completa com PostgreSQL local
 - ✅ Métricas do sistema baseadas em dados reais
 - ✅ Notificações administrativas via banco de dados
 - ✅ Logs de auditoria reais
@@ -113,7 +113,7 @@ ADD COLUMN custom_role_id UUID REFERENCES public.roles(id);
 
 ### 1. **Executar Migrações SQL**
 
-Execute os seguintes scripts no seu banco Supabase na ordem:
+Execute os seguintes scripts no seu banco PostgreSQL local na ordem:
 
 ```bash
 # 1. Sistema de permissões (principal)

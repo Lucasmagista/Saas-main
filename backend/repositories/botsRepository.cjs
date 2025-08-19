@@ -1,43 +1,60 @@
-// Repositório para acesso à tabela 'bots' no Supabase
-const supabase = require('../supabaseClient.cjs');
+
+// Repositório para acesso à tabela 'bots' no PostgreSQL local
+const db = require('../postgresClient.cjs');
+
 
 
 async function listAll() {
-  const { data, error } = await supabase.from('bots').select('*').order('created_at', { ascending: false });
-  if (error) throw new Error(error.message);
-  return data || [];
+  const result = await db.query('SELECT * FROM bots ORDER BY created_at DESC');
+  return result.rows;
 }
+
 
 async function insert(payload) {
-  const { data, error } = await supabase.from('bots').insert([payload]).select().single();
-  if (error) throw new Error(error.message);
-  return data;
+  const keys = Object.keys(payload);
+  const values = Object.values(payload);
+  const params = keys.map((_, i) => `$${i + 1}`).join(', ');
+  const query = `INSERT INTO bots (${keys.join(', ')}) VALUES (${params}) RETURNING *`;
+  const result = await db.query(query, values);
+  return result.rows[0];
 }
+
 
 async function update(id, updatedFields) {
-  const { data, error } = await supabase.from('bots').update(updatedFields).eq('id', id).select().single();
-  if (error) throw new Error(error.message);
-  return data;
+  const keys = Object.keys(updatedFields);
+  const values = Object.values(updatedFields);
+  const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+  const query = `UPDATE bots SET ${setString} WHERE id = $${keys.length + 1} RETURNING *`;
+  const result = await db.query(query, [...values, id]);
+  return result.rows[0];
 }
+
 
 async function findById(id) {
-  const { data, error } = await supabase.from('bots').select('*').eq('id', id).single();
-  if (error) throw new Error(error.message);
-  return data;
+  const result = await db.query('SELECT * FROM bots WHERE id = $1', [id]);
+  return result.rows[0];
 }
+
 
 async function findQrcodeById(id) {
-  const { data, error } = await supabase.from('bots').select('qrcode').eq('id', id).single();
-  if (error) throw new Error(error.message);
-  return data;
+  const result = await db.query('SELECT qrcode FROM bots WHERE id = $1', [id]);
+  return result.rows[0];
 }
 
+
 async function remove(id) {
-  const { error } = await supabase.from('bots').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  await db.query('DELETE FROM bots WHERE id = $1', [id]);
   return { success: true };
 }
 
+module.exports = {
+  listAll,
+  insert,
+  update,
+  findById,
+  findQrcodeById,
+  remove
+};
 module.exports = {
   listAll,
   insert,

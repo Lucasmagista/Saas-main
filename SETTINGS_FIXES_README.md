@@ -10,7 +10,7 @@
 
 ### 1. Correções no `settingsStorage.ts`
 
-- **Estratégia de fallback hierárquica**: Supabase → localStorage
+- **Estratégia de fallback hierárquica**: PostgreSQL local → localStorage
 - **ID fixo para organização padrão**: `00000000-0000-0000-0000-000000000000`
 - **Tratamento robusto de erros** com múltiplas tentativas
 - **Simplificação do código** para reduzir complexidade
@@ -34,7 +34,7 @@ Criados dois scripts SQL para resolver os problemas de RLS:
 
 ### Passo 1: Execute o Script SQL
 
-1. Acesse o Dashboard do Supabase
+1. Acesse seu banco PostgreSQL local
 2. Vá para **SQL Editor**
 3. Execute o conteúdo do arquivo `fix_settings_final.sql`
 
@@ -49,8 +49,8 @@ const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000000';
 // Estratégia de fallback
 export const saveSettingsToFile = async (type, data, key = 'default') => {
   try {
-    // 1. Tentar salvar no Supabase
-    await supabase.from('system_settings').upsert(...)
+  // 1. Tentar salvar no PostgreSQL local
+  // Exemplo: await db.query('UPSERT ...')
   } catch (error) {
     // 2. Fallback para localStorage
     localStorage.setItem(storageKey, JSON.stringify(data));
@@ -78,7 +78,7 @@ Após aplicar as correções, você deve ver:
 ## Monitoramento
 
 Observe os logs do console para confirmar que:
-- `[saveSettingsToFile] Configuração salva com sucesso no Supabase!`
+- `[saveSettingsToFile] Configuração salva com sucesso no banco local!`
 - Ou, em caso de fallback: `[saveSettingsToFile] Salvo no localStorage como fallback`
 
-As configurações agora devem persistir corretamente independentemente dos problemas de RLS do Supabase.
+As configurações agora devem persistir corretamente independentemente de problemas de conexão com o banco.

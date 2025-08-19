@@ -70,7 +70,7 @@ Plataforma SaaS completa, modular e escalável, com múltiplos recursos para ges
 
 ## 🛠️ Tecnologias Utilizadas
 - **Frontend**: [React](https://react.dev), [TypeScript](https://www.typescriptlang.org), [Vite](https://vitejs.dev), [Tailwind CSS](https://tailwindcss.com)
-- **Backend**: [Supabase](https://supabase.com)
+-- **Backend**: PostgreSQL local
 - **Ferramentas**: [ESLint](https://eslint.org), [PostCSS](https://postcss.org)
 
 ---
@@ -118,10 +118,10 @@ npm run dev
 │   ├── store/             # Gerenciamento de estado global (Redux, Zustand, etc.)
 │   ├── types/             # Tipos TypeScript compartilhados
 │   └── utils/             # Utilitários diversos
-├── supabase/              # Configuração, migrações e scripts do banco de dados
+├── supabase/              # Configuração, migrações e scripts do banco de dados (agora apenas PostgreSQL)
 │   ├── migrations/        # Scripts de migração do banco
 │   ├── seeds/             # Dados iniciais para popular o banco
-│   └── config.toml        # Configuração do Supabase
+│   └── config.toml        # (removido) Configuração antiga do Supabase
 ├── .env                   # Variáveis de ambiente
 ├── .eslintrc.js           # Configuração do ESLint
 ├── .gitignore             # Arquivos e pastas ignorados pelo Git
@@ -173,8 +173,8 @@ Consulte o arquivo [CONTRIBUTING.md](CONTRIBUTING.md) para mais detalhes.
 ---
 
 ## ❓ FAQ
-**Como configuro o Supabase?**
-> Edite o arquivo `supabase/config.toml` e siga as instruções da documentação oficial.
+**Como configuro o banco?**
+> Configure seu PostgreSQL local e utilize os scripts da pasta `supabase/migrations`.
 
 **Posso usar outro banco de dados?**
 > Sim, basta adaptar os serviços no backend.

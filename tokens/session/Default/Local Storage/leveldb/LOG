@@ -1,3 +1,2 @@
-2025/08/12-12:30:25.170 18c0 Reusing MANIFEST C:\Users\lucas\Downloads\Saas-main-main\tokens\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/08/12-12:30:25.178 18c0 Recovering log #33
-2025/08/12-12:30:25.183 18c0 Reusing old log C:\Users\lucas\Downloads\Saas-main-main\tokens\session\Default\Local Storage\leveldb/000033.log 
+2025/08/18-21:15:26.050 17b4 Creating DB C:\Users\lucas\Music\Saas-main\tokens\session\Default\Local Storage\leveldb since it was missing.
+2025/08/18-21:15:26.098 17b4 Reusing MANIFEST C:\Users\lucas\Music\Saas-main\tokens\session\Default\Local Storage\leveldb/MANIFEST-000001

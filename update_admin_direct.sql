@@ -1,4 +1,4 @@
--- Script direto para definir admin (execute no Supabase SQL Editor)
+-- Script direto para definir admin (execute no PostgreSQL local)
 
 -- Atualizar diretamente a posição para admin
 UPDATE public.profiles 

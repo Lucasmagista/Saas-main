@@ -1,5 +1,5 @@
 -- EXECUTAR ESTE SCRIPT APÓS A MIGRAÇÃO PRINCIPAL
--- Execute no SQL Editor do Supabase Dashboard
+-- Execute no seu banco PostgreSQL local
 
 -- Script para atualizar o usuário admin existente com o novo sistema de permissões
 -- Execute este script APÓS executar a migração principal

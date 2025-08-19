@@ -89,7 +89,7 @@ import { ProtectedRoute } from '@/hooks/useAuth';
 - Monitoramento de sessões ativas
 
 ### ✅ **Compatibilidade**
-- Mantém compatibilidade com sistema Supabase existente
+- Mantém compatibilidade com sistema PostgreSQL local
 - Hooks com mesma interface do sistema anterior
 - Transição transparente sem quebrar código existente
 
@@ -134,8 +134,7 @@ REFRESH_TOKEN_EXPIRES_IN=30d      # Refresh token: 30 dias
 
 # URLs e APIs
 API_PORT=3000                     # Porta da API
-SUPABASE_URL=https://...          # URL do Supabase
-SUPABASE_KEY=eyJ...               # Chave do Supabase
+DATABASE_URL=postgres://usuario:senha@localhost:5432/seubanco   # URL do PostgreSQL local
 ```
 
 ## 🎯 Próximos Passos Opcionais

@@ -1,5 +1,4 @@
-// Repositório para autenticação usando Supabase
-const supabase = require('../supabaseClient.cjs');
+// Repositório para autenticação usando PostgreSQL local
 const jwtService = require('../services/jwtService.cjs');
 
 async function signInWithPassword(email, password) {
@@ -63,134 +62,54 @@ async function signUp(email, password) {
   return data;
 }
 
+
 async function getUserById(id) {
   try {
     // Busca o perfil do usuário
-    let { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', id)
-      .single();
-      
+    let result = await db.query('SELECT * FROM profiles WHERE id = $1', [id]);
+    let profile = result.rows[0];
     // Se o perfil não existe, cria automaticamente com dados mínimos
-    if (profileError && profileError.code === 'PGRST116') { // No rows returned
+    if (!profile) {
       console.log('Perfil não encontrado, criando automaticamente para usuário:', id);
-      
-      // Tenta buscar informações do usuário do auth.users primeiro
-      let userEmail = `user-${id.slice(0, 8)}@placeholder.com`;
+      // Busca email do usuário
+      let userResult = await db.query('SELECT email FROM users WHERE id = $1', [id]);
+      let userEmail = userResult.rows[0]?.email || `user-${id.slice(0, 8)}@placeholder.com`;
       let userName = 'Usuário';
-      
-      try {
-        const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(id);
-        if (!authError && authUser.user) {
-          userEmail = authUser.user.email || userEmail;
-          userName = authUser.user.user_metadata?.full_name || 
-                   authUser.user.user_metadata?.name || 
-                   authUser.user.email?.split('@')[0] || 
-                   userName;
-        }
-      } catch (authErr) {
-        console.warn('Não foi possível buscar dados do auth.users, usando dados padrão');
-      }
-      
-      // Cria perfil com bypass temporário do RLS usando service role
-      const { data: newProfile, error: createError } = await supabase
-        .from('profiles')
-        .insert({
-          id: id,
-          email: userEmail,
-          full_name: userName,
-          position: 'user',
-          is_active: true
-        })
-        .select()
-        .single();
-        
-      if (createError) {
-        // Se falha a criação, pode ser problema de RLS ou permissões
-        console.error('Erro detalhado ao criar perfil:', {
-          code: createError.code,
-          message: createError.message,
-          details: createError.details,
-          hint: createError.hint
-        });
-        
-        // Retorna erro mais específico baseado no código
-        if (createError.code === '42501') {
-          throw new Error(`Erro de permissão ao criar perfil. Verifique as políticas RLS da tabela profiles.`);
-        } else if (createError.code === '23505') {
-          // Erro de chave duplicada - perfil já existe, tenta buscar novamente
-          const { data: existingProfile, error: refetchError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', id)
-            .single();
-            
-          if (!refetchError && existingProfile) {
-            profile = existingProfile;
-            console.log('Perfil já existia, utilizando perfil encontrado');
-          } else {
-            throw new Error(`Perfil não encontrado após tentativa de criação.`);
-          }
-        } else {
-          throw new Error(`Perfil não encontrado e não foi possível criar automaticamente: ${createError.message}`);
-        }
-      } else {
-        profile = newProfile;
-        console.log('Perfil criado com sucesso:', { id: profile.id, email: profile.email });
-      }
-      
+      // Cria perfil
+      let insertProfile = await db.query(
+        'INSERT INTO profiles (id, email, full_name, position, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [id, userEmail, userName, 'user', true]
+      );
+      profile = insertProfile.rows[0];
+      console.log('Perfil criado com sucesso:', { id: profile.id, email: profile.email });
       // Cria role padrão se não existir
-      const { error: roleError } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: id,
-          role: 'user'
-        });
-        
-      if (roleError && roleError.code !== '23505') { // Ignora erro de duplicata
+      try {
+        await db.query('INSERT INTO user_roles (user_id, role) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, 'user']);
+      } catch (roleError) {
         console.warn('Erro ao criar role padrão:', roleError.message);
       }
-    } else if (profileError) {
-      throw new Error(`Erro ao buscar perfil: ${profileError.message}`);
     }
-    
     // Busca os roles do usuário separadamente
-    const { data: userRoles, error: rolesError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', id);
-    
-    // Se não conseguir buscar roles, não é erro fatal - continua com role padrão
-    if (rolesError) {
-      console.warn('Erro ao buscar roles do usuário:', rolesError.message);
-    }
-    
+    let userRolesResult = await db.query('SELECT role FROM user_roles WHERE user_id = $1', [id]);
+    let userRoles = userRolesResult.rows;
     // Prioriza o 'position' do perfil, depois os roles da tabela user_roles
     let finalRole = 'user';
-    
-    // Se tem position no perfil, usa ele
     if (profile.position && profile.position !== 'user') {
       finalRole = profile.position;
-    }
-    // Se não tem position mas tem roles, usa o role de maior prioridade
-    else if (userRoles && userRoles.length > 0) {
+    } else if (userRoles && userRoles.length > 0) {
       const rolesPriority = { admin: 3, manager: 2, user: 1 };
       const sortedRoles = userRoles
         .map(ur => ur.role)
         .sort((a, b) => (rolesPriority[b] || 0) - (rolesPriority[a] || 0));
-      
       finalRole = sortedRoles[0];
     }
-    
-      profile.role = finalRole;
-      profile.all_roles = userRoles ? userRoles.map(ur => ur.role) : ['user'];
-      // Se o role for admin, garanta que o position também seja admin
-      if (finalRole === 'admin' && (!profile.position || profile.position === 'user')) {
-        profile.position = 'admin';
-      }
-      console.log(`Usuário ${profile.email}: position=${profile.position}, final_role=${profile.role}`);
-      return profile;
+    profile.role = finalRole;
+    profile.all_roles = userRoles ? userRoles.map(ur => ur.role) : ['user'];
+    if (finalRole === 'admin' && (!profile.position || profile.position === 'user')) {
+      profile.position = 'admin';
+    }
+    console.log(`Usuário ${profile.email}: position=${profile.position}, final_role=${profile.role}`);
+    return profile;
   } catch (error) {
     console.error('Erro em getUserById:', error);
     throw error;

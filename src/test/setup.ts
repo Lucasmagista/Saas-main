@@ -1,10 +1,5 @@
 import '@testing-library/jest-dom';
-import { server } from './mocks/server';
-
-// Configurar MSW para interceptar requisições de API
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+// Mocks de MSW removidos: testes devem usar APIs reais ou stubs controlados
 
 // Mock do localStorage
 const localStorageMock = {
@@ -24,7 +19,7 @@ const sessionStorageMock = {
 };
 global.sessionStorage = sessionStorageMock;
 
-// Mock do fetch global
+// Opcional: configurar fetch real ou um mock mínimo
 global.fetch = jest.fn();
 
 // Mock do ResizeObserver

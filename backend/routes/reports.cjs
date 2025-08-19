@@ -41,36 +41,56 @@ router.delete('/:id', async (req, res) => {
 });
 const express = require('express');
 const router = express.Router();
-const supabase = require('../supabaseClient.cjs');
+const db = require('../postgresClient.cjs');
 
 // GET /api/reports - Lista relatórios
 router.get('/', async (req, res) => {
-  const { data, error } = await supabase.from('reports').select('*');
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const result = await db.query('SELECT * FROM reports ORDER BY created_at DESC');
+    res.json(result.rows);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // POST /api/reports - Cria relatório
 router.post('/', express.json(), async (req, res) => {
-  const { data, error } = await supabase.from('reports').insert([req.body]).select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const keys = Object.keys(req.body);
+    const values = Object.values(req.body);
+    const params = keys.map((_, i) => `$${i + 1}`).join(', ');
+    const query = `INSERT INTO reports (${keys.join(',')}) VALUES (${params}) RETURNING *`;
+    const result = await db.query(query, values);
+    res.json(result.rows[0]);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // PUT /api/reports/:id - Atualiza relatório
 router.put('/:id', express.json(), async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await supabase.from('reports').update(req.body).eq('id', id).select().single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const keys = Object.keys(req.body);
+    const values = Object.values(req.body);
+    const setString = keys.map((k, i) => `${k} = $${i + 1}`).join(', ');
+    const query = `UPDATE reports SET ${setString} WHERE id = $${keys.length + 1} RETURNING *`;
+    const result = await db.query(query, [...values, id]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // DELETE /api/reports/:id - Remove relatório
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  const { error } = await supabase.from('reports').delete().eq('id', id);
-  if (error) return res.status(500).json({ error: error.message });
-  res.json({ success: true });
+  try {
+    await db.query('DELETE FROM reports WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

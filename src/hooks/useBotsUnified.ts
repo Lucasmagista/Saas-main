@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+// Supabase removido: utilizar apenas API backend
 import { useToast } from '@/hooks/use-toast';
 
 // Helper para obter token JWT do localStorage
@@ -140,19 +140,8 @@ export const useBotsUnified = () => {
         const apiResponse = await makeAuthenticatedRequest(`${API_BASE}/api/bots`);
         const apiBots = apiResponse.ok ? await apiResponse.json() : [];
 
-        // Buscar do Supabase (tabela chatbots)
-        const { data: chatbots, error } = await supabase
-          .from('chatbots')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error && error.code !== 'PGRST116') { // Ignora erro de tabela não encontrada
-          console.warn('Erro ao carregar chatbots:', error);
-        }
-
-        // Unificar os dados
+        // Unificar os dados somente da API backend (dados reais)
         const unifiedBots: UnifiedBot[] = [
-          // Bots da API backend
           ...(apiBots || []).map((bot: ApiBot) => ({
             id: bot.id,
             name: bot.name,
@@ -168,30 +157,6 @@ export const useBotsUnified = () => {
             version: '1.0.0',
             author: 'Sistema',
             source: bot.session_name || 'Local',
-            lastRun: bot.updated_at || 'Nunca',
-            totalRuns: 0,
-            files: [],
-            dependencies: [],
-            entryPoint: 'index.js'
-          })),
-          // Chatbots do Supabase
-          ...(chatbots || []).map((bot) => ({
-            id: bot.id,
-            name: bot.name,
-            description: bot.description,
-            channel: bot.channel,
-            is_active: bot.is_active || false,
-            config: bot.config as BotConfig || {},
-            created_at: bot.created_at || null,
-            updated_at: bot.updated_at || null,
-            organization_id: bot.organization_id,
-            knowledge_base: bot.knowledge_base,
-            created_by: bot.created_by,
-            type: bot.channel || 'chat',
-            status: bot.is_active ? 'active' : 'inactive',
-            version: '1.0.0',
-            author: bot.created_by || 'Sistema',
-            source: bot.channel || 'Chatbot',
             lastRun: bot.updated_at || 'Nunca',
             totalRuns: 0,
             files: [],
@@ -249,21 +214,7 @@ export const useCreateBotUnified = () => {
 
         return await response.json();
       } else {
-        // Criar chatbot via Supabase
-        const { data, error } = await supabase
-          .from('chatbots')
-          .insert({
-            name: botData.name,
-            description: botData.description,
-            channel: botData.type,
-            config: (botData.config || {}) as never,
-            is_active: false
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
+        throw new Error('Canal de bot não suportado no momento. Use "whatsapp".');
       }
     },
     onSuccess: () => {
@@ -312,21 +263,7 @@ export const useUpdateBotUnified = () => {
 
         return await response.json();
       } else {
-        // Atualizar via Supabase - apenas campos compatíveis
-        const { data, error } = await supabase
-          .from('chatbots')
-          .update({
-            name,
-            description: updates.description,
-            is_active: updates.is_active,
-            config: updates.config ? (updates.config as never) : undefined
-          })
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        return data;
+        throw new Error('Atualização de canais não-whatsapp não suportada.');
       }
     },
     onSuccess: () => {
@@ -388,20 +325,7 @@ export const useDeleteBotUnified = () => {
         console.log('✅ [useDeleteBotUnified] Sucesso da API:', result);
         return result;
       } else {
-        // Deletar via Supabase
-        console.log('🗄️ [useDeleteBotUnified] Deletando via Supabase...');
-        const { error } = await supabase
-          .from('chatbots')
-          .delete()
-          .eq('id', id);
-
-        if (error) {
-          console.log('❌ [useDeleteBotUnified] Erro Supabase:', error);
-          throw error;
-        }
-        
-        console.log('✅ [useDeleteBotUnified] Sucesso Supabase');
-        return { success: true };
+        throw new Error('Remoção de canais não-whatsapp não suportada.');
       }
     },
     onSuccess: () => {

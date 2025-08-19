@@ -13,8 +13,6 @@ dotenv.config();
 
 // Lista de variáveis obrigatórias. Adicione novas chaves conforme necessário.
 const REQUIRED_VARS = [
-  'SUPABASE_URL',
-  'SUPABASE_KEY',
   'JWT_SECRET',
   'WPP_PORT',
   'DATABASE_URL', // Adicionado para PostgreSQL local
@@ -41,10 +39,6 @@ if (process.env.DATABASE_URL && !process.env.DATABASE_URL.startsWith('postgresql
  * utilize operador || para definir defaults ou deixe undefined.
  */
 module.exports = {
-  // Supabase (mantido para compatibilidade)
-  supabaseUrl: process.env.SUPABASE_URL,
-  supabaseKey: process.env.SUPABASE_KEY,
-  
   // JWT e Autenticação
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',

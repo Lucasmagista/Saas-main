@@ -1,5 +1,5 @@
 const express = require('express');
-const supabase = require('../supabaseClient.cjs');
+const db = require('../postgresClient.cjs');
 const config = require('../config.cjs');
 const logger = require('../logger.cjs');
 const router = express.Router();
@@ -69,17 +69,10 @@ async function sendWebhookWithRetry(webhookUrl, payload, maxRetries = config.web
 // Função para processar webhooks configurados
 async function processConfiguredWebhooks(eventData) {
   try {
-    // Buscar webhooks ativos no banco
-    const { data: webhooks, error } = await supabase
-      .from('webhooks')
-      .select('*')
-      .eq('is_active', true);
-    
-    if (error) {
-      logger.error('Erro ao buscar webhooks configurados:', error);
-      return;
-    }
-    
+    // Buscar webhooks ativos no banco (PostgreSQL local)
+    const result = await db.query('SELECT * FROM webhooks WHERE is_active = TRUE');
+    const webhooks = result.rows;
+
     if (!webhooks || webhooks.length === 0) {
       logger.debug('Nenhum webhook configurado encontrado');
       return;
@@ -196,29 +189,32 @@ router.post('/', async (req, res) => {
     }
 
     // Persistência da mensagem
-    const insertData = {
-      bot_id: null, // Ajuste se necessário para identificar o bot
-      direction: fromMe ? 'sent' : 'received',
-      message,
-      type: type || 'text',
-      number,
-      timestamp: timestamp ? Number(timestamp) : null,
-      created_at: new Date().toISOString(),
-      raw_id: id || null,
-      media_url: mediaUrl || null,
-      metadata: {
-        userAgent: req.get('User-Agent'),
-        ip: req.ip,
-        headers: req.headers
-      }
-    };
-
-    const { error: dbError } = await supabase.from('bot_logs').insert(insertData);
-    if (dbError) {
+    // Inserir log da mensagem no PostgreSQL
+    try {
+      await db.query(
+        `INSERT INTO bot_logs (
+          bot_id, direction, message, type, number, timestamp, created_at, raw_id, media_url, metadata
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [
+          null,
+          fromMe ? 'sent' : 'received',
+          message,
+          type || 'text',
+          number,
+          timestamp ? Number(timestamp) : null,
+          new Date().toISOString(),
+          id || null,
+          mediaUrl || null,
+          JSON.stringify({
+            userAgent: req.get('User-Agent'),
+            ip: req.ip,
+            headers: req.headers,
+          }),
+        ]
+      );
+    } catch (dbError) {
       logger.error('Erro ao inserir mensagem no banco:', dbError);
-      return res.status(500).json({ 
-        error: 'Erro ao persistir mensagem no banco' 
-      });
+      return res.status(500).json({ error: 'Erro ao persistir mensagem no banco' });
     }
 
     // Processar webhooks configurados (assíncrono)
@@ -261,30 +257,17 @@ router.post('/', async (req, res) => {
 router.get('/test', async (req, res) => {
   try {
     // Verificar se o banco está acessível
-    const { error: dbTest } = await supabase
-      .from('bot_logs')
-      .select('count')
-      .limit(1);
-    
-    if (dbTest) {
-      return res.status(500).json({
-        status: 'error',
-        message: 'Banco de dados não acessível',
-        error: dbTest.message
-      });
-    }
-    
+    await db.query('SELECT 1');
+
     // Verificar webhooks configurados
-    const { data: webhooks, error: webhookError } = await supabase
-      .from('webhooks')
-      .select('count')
-      .eq('is_active', true);
-    
+    const result = await db.query('SELECT COUNT(1) AS count FROM webhooks WHERE is_active = TRUE');
+    const activeCount = Number(result.rows?.[0]?.count || 0);
+
     return res.status(200).json({
       status: 'ok',
       message: 'Webhook endpoint funcionando',
       database: 'connected',
-      activeWebhooks: webhooks?.length || 0,
+      activeWebhooks: activeCount,
       timestamp: new Date().toISOString()
     });
     

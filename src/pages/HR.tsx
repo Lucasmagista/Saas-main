@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removido. Buscar dados reais via API backend quando disponível.
 import {
   Users,
   UserPlus,
@@ -54,29 +54,20 @@ const HR = () => {
   // Função para buscar métricas de RH
   const fetchHRMetrics = useCallback(async () => {
     try {
-      // Buscar dados reais do Supabase em paralelo
-      const [profilesResult, jobsResult, candidatesResult] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, department, created_at")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("jobs")
-          .select("id, status, created_at")
-          .eq("status", "active"),
-        supabase
-          .from("candidates")
-          .select("id, stage, status, created_at")
-          .eq("status", "active")
+      // Buscar dados reais via API backend (substitua por endpoints reais)
+      const [profilesRes, jobsRes, candidatesRes] = await Promise.all([
+        fetch('/api/user/profiles'),
+        fetch('/api/hr/jobs?status=active'),
+        fetch('/api/hr/candidates?status=active'),
       ]);
 
-      if (profilesResult.error) throw profilesResult.error;
-      if (jobsResult.error) throw jobsResult.error;
-      if (candidatesResult.error) throw candidatesResult.error;
+      if (!profilesRes.ok || !jobsRes.ok || !candidatesRes.ok) {
+        throw new Error('Falha ao carregar dados de RH');
+      }
 
-      const profiles = profilesResult.data || [];
-      const jobs = jobsResult.data || [];
-      const candidates = candidatesResult.data || [];
+      const profiles = await profilesRes.json();
+      const jobs = await jobsRes.json();
+      const candidates = await candidatesRes.json();
 
       const totalEmployees = profiles.length;
       const activeJobs = jobs.length;

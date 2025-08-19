@@ -1,9 +1,6 @@
 const request = require('supertest');
 const app = require('../index.cjs');
-const { createClient } = require('@supabase/supabase-js');
-
-// Mock do Supabase
-jest.mock('@supabase/supabase-js');
+// Removido Supabase
 
 // Mock do logger
 jest.mock('../logger.cjs', () => ({

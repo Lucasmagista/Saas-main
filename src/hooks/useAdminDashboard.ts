@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 
 // Types para o dashboard administrativo
 export interface SystemStatus {
@@ -79,94 +78,56 @@ export interface SystemLog {
 
 // Hook principal para dados do dashboard administrativo
 export const useAdminDashboard = () => {
-
-  // System Status
   const { data: systemStatus, isLoading: statusLoading, error: statusError } = useQuery({
     queryKey: ['admin-system-status'],
     queryFn: async (): Promise<SystemStatus> => {
       try {
-        // Buscar dados em paralelo para melhor performance
-        const [usersResult, errorsResult] = await Promise.allSettled([
-          supabase
-            .from('profiles')
-            .select('id, is_active, last_login, created_at')
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('audit_logs_v2')
-            .select('id, action, created_at')
-            .eq('action', 'error')
-            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        const [usersRes, errorsRes] = await Promise.all([
+          fetch('/api/user'),
+          fetch('/api/audit?level=error&since=24h')
         ]);
 
-        // Extrair dados com tratamento de erros
-        const users = usersResult.status === 'fulfilled' ? usersResult.value.data || [] : [];
-        const errors = errorsResult.status === 'fulfilled' ? errorsResult.value.data || [] : [];
+        const users = usersRes.ok ? await usersRes.json() : [];
+        const errors = errorsRes.ok ? await errorsRes.json() : [];
 
-        // Log de erros para debugging
-        if (usersResult.status === 'rejected') {
-          console.error('Erro ao buscar usuários:', usersResult.reason);
-        }
-        if (errorsResult.status === 'rejected') {
-          console.warn('Erro ao buscar logs de erro:', errorsResult.reason);
-        }
-
-        // Calcular sessões ativas de forma mais precisa
         const now = Date.now();
-        const recentLogins = users.filter(u => {
+        const recentLogins = users.filter((u: any) => {
           if (!u.last_login) return false;
           const loginTime = new Date(u.last_login).getTime();
           const hoursSinceLogin = (now - loginTime) / (1000 * 60 * 60);
-          return hoursSinceLogin <= 24; // Últimas 24 horas
+          return hoursSinceLogin <= 24;
         });
 
-        // Calcular métricas reais com validação
         const totalUsers = Math.max(0, users.length);
-        const activeUsers = Math.max(0, users.filter(u => u.is_active === true).length);
+        const activeUsers = Math.max(0, users.filter((u: any) => u.is_active === true).length);
         const inactiveUsers = totalUsers - activeUsers;
         const activeSessions = Math.max(0, recentLogins.length);
         const systemErrors = Math.max(0, errors.length);
 
-        // Buscar backup logs com tratamento de erro
-        let lastBackupData = null;
+        let lastBackupData: any = null;
         try {
-          const lastBackupResult = await supabase
-            .from('backup_logs')
-            .select('completed_at')
-            .eq('status', 'completed')
-            .order('completed_at', { ascending: false })
-            .limit(1)
-            .single();
-          
-          lastBackupData = lastBackupResult.data;
-        } catch (error) {
-          console.warn('Tabela backup_logs não encontrada:', error);
+          const backupRes = await fetch('/api/monitoring/backups/last');
+          lastBackupData = backupRes.ok ? await backupRes.json() : null;
+        } catch {
           lastBackupData = null;
         }
 
-        // Calcular uptime baseado na idade do sistema
         const getSystemUptime = (): string => {
           if (users.length === 0) return '99.98%';
-          
-          // Calcular baseado no usuário mais antigo (aproximação do tempo de sistema)
-          const oldestUser = users.reduce((oldest, user) => 
+          const oldestUser = users.reduce((oldest: any, user: any) =>
             new Date(user.created_at) < new Date(oldest.created_at) ? user : oldest,
-            users[0] // Valor inicial é o primeiro usuário
+            users[0]
           );
-          
           const systemAge = Date.now() - new Date(oldestUser.created_at).getTime();
           const days = Math.floor(systemAge / (1000 * 60 * 60 * 24));
           return days > 0 ? `${Math.min(99.95, 99.5 + (days * 0.01))}%` : '99.50%';
         };
 
-        // Métricas calculadas baseadas no uso real do sistema
         const uptime = getSystemUptime();
         const memoryUsage = Math.min(85, 35 + (totalUsers * 0.5) + (systemErrors * 2));
         const cpuUsage = Math.min(50, 8 + (activeSessions * 2) + (systemErrors * 5));
         const diskUsage = Math.min(90, 25 + (totalUsers * 0.3) + (errors.length * 0.1));
-        
-        // Último backup com fallback
-        const lastBackup = lastBackupData?.completed_at || 
-          new Date(Date.now() - Math.random() * 6 * 60 * 60 * 1000).toISOString();
+        const lastBackup = lastBackupData?.completed_at || new Date().toISOString();
 
         return {
           totalUsers,
@@ -179,12 +140,9 @@ export const useAdminDashboard = () => {
           memoryUsage,
           cpuUsage,
           diskUsage,
-          lastBackup: lastBackup,
+          lastBackup,
         };
       } catch (error) {
-        console.error('Erro ao buscar status do sistema:', error);
-        
-        // Retornar dados básicos em caso de erro para não quebrar a interface
         return {
           totalUsers: 0,
           activeUsers: 0,
@@ -200,10 +158,10 @@ export const useAdminDashboard = () => {
         };
       }
     },
-    refetchInterval: 30000, // Refetch a cada 30 segundos
-    retry: 3, // Tentar 3 vezes em caso de erro
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Backoff exponencial
-    staleTime: 25000, // Considerar dados válidos por 25 segundos
+    refetchInterval: 30000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 25000,
   });
 
   return {
@@ -222,45 +180,28 @@ export const useAdminUsers = () => {
   const { data: users, isLoading: usersLoading, error: usersError } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async (): Promise<UserData[]> => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          email,
-          full_name,
-          position,
-          is_active,
-          last_login,
-          created_at
-        `)
-        .order('created_at', { ascending: false });
+      const res = await fetch('/api/user');
+      if (!res.ok) throw new Error('Erro ao buscar usuários');
+      const data = await res.json();
 
-      if (error) {
-        console.error('Erro ao buscar usuários:', error);
-        throw error;
-      }
-
-      return (data || []).map(user => ({
+      return (data || []).map((user: any) => ({
         ...user,
-        // Garantir que sempre temos valores válidos
         full_name: user.full_name || user.email?.split('@')[0] || 'Usuário',
         position: user.position || 'Não definido',
-        role: 'user', // Valor padrão até implementarmos o sistema de roles
+        role: 'user',
         role_color: '#6366f1',
         permissions: [],
-        // Formatação de datas mais consistente
         last_login: user.last_login || '',
         created_at: user.created_at || new Date().toISOString(),
       }));
     },
     retry: 2,
-    staleTime: 60000, // 1 minuto
+    staleTime: 60000,
     refetchOnWindowFocus: false,
   });
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, updates }: { userId: string; updates: Partial<UserData> }) => {
-      // Validar dados antes de enviar
       const cleanUpdates = Object.fromEntries(
         Object.entries(updates).filter(([_, value]) => value !== undefined && value !== null)
       );
@@ -269,30 +210,16 @@ export const useAdminUsers = () => {
         throw new Error('Nenhum campo válido para atualizar');
       }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(cleanUpdates)
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      // Log de auditoria
-      try {
-        await supabase.from('audit_logs_v2').insert({
-          action: 'user_updated',
-          resource_type: 'profile',
-          resource_id: userId,
-          new_values: cleanUpdates,
-          ip_address: 'admin_panel',
-          user_agent: navigator.userAgent,
-        });
-      } catch (err) {
-        console.warn('Erro ao registrar auditoria:', err);
-      }
+      const res = await fetch(`/api/user/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanUpdates),
+      });
+      if (!res.ok) throw new Error('Erro ao atualizar usuário');
 
       return { userId, updates: cleanUpdates };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       toast({ 
         title: 'Usuário atualizado com sucesso!',
@@ -300,7 +227,6 @@ export const useAdminUsers = () => {
       });
     },
     onError: (error: Error) => {
-      console.error('Erro ao atualizar usuário:', error);
       toast({ 
         title: 'Erro ao atualizar usuário', 
         description: error.message || 'Ocorreu um erro inesperado',
@@ -311,27 +237,8 @@ export const useAdminUsers = () => {
 
   const blockUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_active: false })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      // Log de auditoria para bloqueio
-      try {
-        await supabase.from('audit_logs_v2').insert({
-          action: 'user_blocked',
-          resource_type: 'profile',
-          resource_id: userId,
-          new_values: { is_active: false },
-          ip_address: 'admin_panel',
-          user_agent: navigator.userAgent,
-        });
-      } catch (err) {
-        console.warn('Erro ao registrar auditoria:', err);
-      }
-
+      const res = await fetch(`/api/user/${userId}/block`, { method: 'POST' });
+      if (!res.ok) throw new Error('Erro ao bloquear usuário');
       return userId;
     },
     onSuccess: () => {
@@ -342,7 +249,6 @@ export const useAdminUsers = () => {
       });
     },
     onError: (error: Error) => {
-      console.error('Erro ao bloquear usuário:', error);
       toast({ 
         title: 'Erro ao bloquear usuário',
         description: error.message || 'Ocorreu um erro inesperado',
@@ -353,27 +259,8 @@ export const useAdminUsers = () => {
 
   const unblockUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_active: true })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      // Log de auditoria para desbloqueio
-      try {
-        await supabase.from('audit_logs_v2').insert({
-          action: 'user_unblocked',
-          resource_type: 'profile',
-          resource_id: userId,
-          new_values: { is_active: true },
-          ip_address: 'admin_panel',
-          user_agent: navigator.userAgent,
-        });
-      } catch (err) {
-        console.warn('Erro ao registrar auditoria:', err);
-      }
-
+      const res = await fetch(`/api/user/${userId}/unblock`, { method: 'POST' });
+      if (!res.ok) throw new Error('Erro ao desbloquear usuário');
       return userId;
     },
     onSuccess: () => {
@@ -384,7 +271,6 @@ export const useAdminUsers = () => {
       });
     },
     onError: (error: Error) => {
-      console.error('Erro ao desbloquear usuário:', error);
       toast({ 
         title: 'Erro ao desbloquear usuário',
         description: error.message || 'Ocorreu um erro inesperado',
@@ -411,48 +297,14 @@ export const useAdminAuditLogs = (limit = 50) => {
   const { data: auditLogs, isLoading: logsLoading, error: logsError } = useQuery({
     queryKey: ['admin-audit-logs', limit],
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      const { data, error } = await supabase
-        .from('audit_logs_v2')
-        .select(`
-          id,
-          action,
-          resource_type,
-          resource_id,
-          user_id,
-          ip_address,
-          user_agent,
-          old_values,
-          new_values,
-          created_at,
-          profiles!user_id (
-            email,
-            full_name
-          )
-        `)
-        .order('created_at', { ascending: false })
-        .limit(Math.min(limit, 200)); // Limitar a no máximo 200 registros
-
-      if (error) {
-        console.error('Erro ao buscar logs de auditoria:', error);
-        throw error;
-      }
-
-      return (data || []).map(log => {
-        const profile = log.profiles as { email?: string; full_name?: string } | null;
-        
-        return {
-          ...log,
-          ip_address: (log.ip_address as string) || 'Desconhecido',
-          user_email: profile?.email || 'Sistema',
-          user_name: profile?.full_name || 'N/A',
-          old_values: log.old_values as Record<string, unknown> | null,
-          new_values: log.new_values as Record<string, unknown> | null,
-        };
-      });
+      const res = await fetch(`/api/audit?limit=${Math.min(limit, 200)}`);
+      if (!res.ok) throw new Error('Erro ao buscar logs de auditoria');
+      const data = await res.json();
+      return data;
     },
     retry: 2,
-    staleTime: 30000, // 30 segundos
-    refetchInterval: 60000, // Refetch a cada minuto
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
 
   return {
@@ -471,21 +323,11 @@ export const useAdminSecurityAlerts = () => {
     queryKey: ['admin-security-alerts'],
     queryFn: async (): Promise<SecurityAlert[]> => {
       try {
-        // Buscar alertas baseados nos logs de auditoria
-        const { data: auditLogs, error: auditError } = await supabase
-          .from('audit_logs_v2')
-          .select('id, action, user_id, ip_address, created_at')
-          .in('action', ['failed_login', 'unauthorized_access', 'permission_denied', 'user_blocked'])
-          .order('created_at', { ascending: false })
-          .limit(20);
+        const res = await fetch('/api/audit?types=failed_login,unauthorized_access,permission_denied,user_blocked&limit=20');
+        if (!res.ok) return [];
+        const auditLogs = await res.json();
 
-        if (auditError) {
-          console.warn('Erro ao buscar logs para alertas:', auditError);
-          return [];
-        }
-
-        // Gerar alertas baseados nos logs
-        return (auditLogs || []).map(log => {
+        return (auditLogs || []).map((log: any) => {
           const getSeverity = (action: string): 'low' | 'medium' | 'high' | 'critical' => {
             switch (action) {
               case 'failed_login': return 'medium';
@@ -519,30 +361,17 @@ export const useAdminSecurityAlerts = () => {
         });
 
       } catch (error) {
-        console.error('Erro ao buscar alertas de segurança:', error);
         return [];
       }
     },
     retry: 2,
-    staleTime: 60000, // 1 minuto
-    refetchInterval: 120000, // 2 minutos
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 
   const resolveAlertMutation = useMutation({
     mutationFn: async (alertId: string) => {
-      // Log de auditoria
-      try {
-        await supabase.from('audit_logs_v2').insert({
-          action: 'security_alert_resolved',
-          resource_type: 'security_alert',
-          resource_id: alertId,
-          ip_address: 'admin_panel',
-          user_agent: navigator.userAgent,
-        });
-      } catch (err) {
-        console.warn('Erro ao registrar auditoria:', err);
-      }
-
+      await fetch('/api/audit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'security_alert_resolved', resource_type: 'security_alert', resource_id: alertId }) });
       return alertId;
     },
     onSuccess: () => {
@@ -553,7 +382,6 @@ export const useAdminSecurityAlerts = () => {
       });
     },
     onError: (error: Error) => {
-      console.error('Erro ao resolver alerta:', error);
       toast({ 
         title: 'Erro ao resolver alerta',
         description: error.message || 'Ocorreu um erro inesperado',
@@ -580,18 +408,11 @@ export const useAdminNotifications = () => {
     queryKey: ['admin-notifications'],
     queryFn: async (): Promise<AdminNotification[]> => {
       try {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('id, title, message, created_at')
-          .order('created_at', { ascending: false })
-          .limit(50);
+        const res = await fetch('/api/notifications?limit=50');
+        if (!res.ok) return [];
+        const data = await res.json();
 
-        if (error) {
-          console.warn('Erro ao buscar notificações:', error);
-          return [];
-        }
-
-        return (data || []).map(notification => ({
+        return (data || []).map((notification: any) => ({
           id: notification.id,
           type: 'info' as const,
           title: notification.title || 'Notificação',
@@ -601,7 +422,6 @@ export const useAdminNotifications = () => {
           action_required: false,
         }));
       } catch (error) {
-        console.error('Erro ao buscar notificações:', error);
         return [];
       }
     },
@@ -609,8 +429,6 @@ export const useAdminNotifications = () => {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      // Simular marcação como lida (não temos campo read na tabela notifications)
-      console.log('Marcando notificação como lida:', notificationId);
       return notificationId;
     },
     onSuccess: () => {
@@ -621,8 +439,6 @@ export const useAdminNotifications = () => {
 
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      // Simular marcação de todas como lidas
-      console.log('Marcando todas as notificações como lidas');
       return true;
     },
     onSuccess: () => {
@@ -646,19 +462,10 @@ export const useAdminSystemLogs = () => {
     queryKey: ['admin-system-logs'],
     queryFn: async (): Promise<SystemLog[]> => {
       try {
-        // Buscar apenas logs de auditoria (tabela que existe)
-        const { data: auditLogs, error: auditError } = await supabase
-          .from('audit_logs_v2')
-          .select('id, action, user_id, ip_address, created_at')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (auditError) {
-          console.warn('Erro ao buscar logs de auditoria:', auditError);
-          return [];
-        }
-
-        return (auditLogs || []).map(log => ({
+        const res = await fetch('/api/audit?limit=100');
+        if (!res.ok) return [];
+        const auditLogs = await res.json();
+        return (auditLogs || []).map((log: any) => ({
           id: log.id,
           type: 'audit' as const,
           level: getLogLevel(log.action),
@@ -670,16 +477,14 @@ export const useAdminSystemLogs = () => {
         }));
 
       } catch (error) {
-        console.error('Erro ao buscar logs do sistema:', error);
         return [];
       }
     },
     retry: 2,
-    staleTime: 30000, // 30 segundos
-    refetchInterval: 60000, // 1 minuto
+    staleTime: 30000,
+    refetchInterval: 60000,
   });
 
-  // Função auxiliar para determinar o nível do log
   const getLogLevel = (action: string): 'info' | 'warning' | 'error' => {
     const errorActions = ['failed_login', 'unauthorized_access', 'error', 'failed'];
     const warningActions = ['permission_denied', 'warning', 'blocked'];
@@ -693,7 +498,6 @@ export const useAdminSystemLogs = () => {
     return 'info';
   };
 
-  // Função auxiliar para gerar mensagem amigável
   const getLogMessage = (action: string): string => {
     const messageMap: Record<string, string> = {
       'user_login': 'Usuário fez login',

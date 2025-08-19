@@ -90,11 +90,9 @@ router.delete('/:id', async (req, res) => {
 // GET /api/integrations/stats - Estatísticas gerais das integrações
 router.get('/stats', async (req, res) => {
   try {
-    // Exemplo: buscar estatísticas reais do banco (ajuste conforme seu modelo)
-    // Aqui, apenas um exemplo simples de contagem
-    const { data: integrations, error } = await require('../supabaseClient.cjs').from('integrations').select('*');
-    if (error) throw new Error(error.message);
-    const total = integrations.length;
+    const db = require('../postgresClient.cjs');
+    const result = await db.query('SELECT COUNT(1) AS total FROM integrations');
+    const total = Number(result.rows?.[0]?.total || 0);
     // Você pode adicionar mais estatísticas reais aqui
     res.json([
       {
@@ -126,25 +124,25 @@ router.get('/status', async (req, res) => {
 
 // GET e POST /api/integrations/global-config - Configurações globais das integrações
 const GLOBAL_CONFIG_KEY = 'integrations_global_config';
-const supabase = require('../supabaseClient.cjs');
+const db = require('../postgresClient.cjs');
 
 router.get('/global-config', async (req, res) => {
   try {
-    // Exemplo: buscar config de uma tabela 'configs' (ajuste conforme seu modelo)
-    const { data, error } = await supabase.from('configs').select('value').eq('key', GLOBAL_CONFIG_KEY).single();
-    if (error && error.code !== 'PGRST116') throw new Error(error.message);
-    res.json(data ? data.value : null);
+    const result = await db.query('SELECT value FROM configs WHERE key = $1 LIMIT 1', [GLOBAL_CONFIG_KEY]);
+    res.json(result.rows[0]?.value || null);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar configurações globais: ' + err.message });
   }
 });
 
-router.post('/global-config', async (req, res) => {
+router.post('/global-config', express.json(), async (req, res) => {
   try {
     const value = req.body;
-    // Upsert na tabela configs
-    const { error } = await supabase.from('configs').upsert({ key: GLOBAL_CONFIG_KEY, value }, { onConflict: ['key'] });
-    if (error) throw new Error(error.message);
+    await db.query(
+      `INSERT INTO configs(key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [GLOBAL_CONFIG_KEY, value]
+    );
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao salvar configurações globais: ' + err.message });

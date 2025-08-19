@@ -10,41 +10,23 @@ const { execSync } = require('child_process');
 // Função para verificar status do banco de dados
 async function checkDatabaseHealth() {
   try {
-    const supabaseClient = require('../supabaseClient.cjs');
-    
+    const db = require('../postgresClient.cjs');
     const startTime = Date.now();
-    // Teste simples de conectividade
-    const { error } = await supabaseClient
-      .from('profiles')
-      .select('id')
-      .limit(1);
-    
+    await db.query('SELECT 1');
     const queryTime = Date.now() - startTime;
-    
-    if (error) {
-      return {
-        status: 'offline',
-        connections: 0,
-        maxConnections: 100,
-        queryTime: 0,
-        storage: 0,
-        error: error.message
-      };
-    }
-    
     return {
       status: 'online',
-      connections: 1, // Supabase gerencia conexões automaticamente
-      maxConnections: 100,
+      connections: 0,
+      maxConnections: 0,
       queryTime,
-      storage: 0 // Requer implementação específica do Supabase
+      storage: 0
     };
   } catch (error) {
     logger.error('Erro ao verificar saúde do banco de dados:', error);
     return {
       status: 'offline',
       connections: 0,
-      maxConnections: 100,
+      maxConnections: 0,
       queryTime: 0,
       storage: 0,
       error: error.message

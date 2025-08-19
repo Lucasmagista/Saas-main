@@ -74,18 +74,22 @@ async function sendMessage(number, message) {
     try {
       const response = await realClient.sendText(number, message);
       
-      // Persiste no banco de dados
+      // Persiste no banco de dados (PostgreSQL local)
       try {
-        const supabase = require('../supabaseClient.cjs');
-        await supabase.from('messages').insert({
-          external_id: response.id || Date.now().toString(),
-          phone_number: number,
-          message_body: message,
-          direction: 'sent',
-          platform: 'whatsapp',
-          status: 'sent',
-          created_at: new Date().toISOString()
-        });
+        const db = require('../postgresClient.cjs');
+        await db.query(
+          `INSERT INTO messages (external_id, phone_number, message_body, direction, platform, status, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [
+            response.id || Date.now().toString(),
+            number,
+            message,
+            'sent',
+            'whatsapp',
+            'sent',
+            new Date().toISOString(),
+          ]
+        );
       } catch (dbError) {
         console.error('[wppconnect] Erro ao salvar mensagem no banco:', dbError);
       }
@@ -120,28 +124,19 @@ async function getMessages() {
   }
   
   try {
-    const supabase = require('../supabaseClient.cjs');
-    
-    // Busca mensagens dos últimos 7 dias
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select('*')
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false })
-      .limit(100);
-    
-    if (error) {
-      console.error('[wppconnect] Erro ao buscar mensagens:', error);
-      return messageCache; // Retorna cache anterior em caso de erro
-    }
-    
-    // Converte para formato esperado
-    messageCache = messages.map(msg => ({
+    const db = require('../postgresClient.cjs');
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const result = await db.query(
+      'SELECT * FROM messages WHERE created_at >= $1 ORDER BY created_at DESC LIMIT 100',
+      [since]
+    );
+
+    messageCache = result.rows.map((msg) => ({
       id: msg.external_id || msg.id,
       number: msg.phone_number,
       message: msg.message_body,
       fromMe: msg.direction === 'sent',
-      timestamp: msg.created_at
+      timestamp: msg.created_at,
     }));
     
     lastCacheUpdate = now;

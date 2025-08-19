@@ -24,7 +24,7 @@ const authenticateJWT = require('./middleware/authenticateJWT.cjs');
 const authorizePermission = require('./middleware/authorizePermission.cjs');
 const authorizeRole = require('./middleware/authorizeRole.cjs');
 const rateLimit = require('express-rate-limit');
-const { createClient } = require('@supabase/supabase-js');
+// Removido Supabase: usamos apenas PostgreSQL local via postgresClient
 
 // Logger estruturado
 const logger = require('./logger.cjs');
@@ -112,8 +112,7 @@ async function initializeServer() {
       next();
     });
 
-    // Supabase client configurado via config central
-    const supabase = createClient(config.supabaseUrl, config.supabaseKey);
+    // Supabase removido: nenhuma inicialização necessária aqui
 
     // Limite de taxa para rotas sensíveis
     const limiter = rateLimit({

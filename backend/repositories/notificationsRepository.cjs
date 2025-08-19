@@ -1,10 +1,9 @@
-// Repositório para acesso à tabela 'notifications' no Supabase
-const supabase = require('../supabaseClient.cjs');
+// Repositório para acesso à tabela 'notifications' no PostgreSQL local
+const db = require('../postgresClient.cjs');
 
 async function listAll() {
-  const { data, error } = await supabase.from('notifications').select('*');
-  if (error) throw new Error(error.message);
-  return data || [];
+  const result = await db.query('SELECT * FROM notifications ORDER BY created_at DESC');
+  return result.rows;
 }
 
 module.exports = {

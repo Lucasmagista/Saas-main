@@ -42,6 +42,25 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8, 'Nova senha deve ter pelo menos 8 caracteres'),
 });
 
+// Schemas para 2FA
+const twoFactorSchemas = {
+  setup: z.object({
+    token: z.string().min(6, 'Token deve ter pelo menos 6 dígitos').max(6)
+  }),
+  enable: z.object({
+    token: z.string().min(6, 'Token deve ter pelo menos 6 dígitos').max(6)
+  }),
+  disable: z.object({
+    token: z.string().min(6, 'Token deve ter pelo menos 6 dígitos').max(6)
+  }),
+  verify: z.object({
+    token: z.string().min(6, 'Token deve ter pelo menos 6 dígitos').max(6)
+  }),
+  backupCodes: z.object({
+    code: z.string().min(1, 'Código de backup é obrigatório')
+  })
+};
+
 // POST /login
 router.post('/login', rateLimiters.auth, idempotency(), validate({ body: loginSchema }), async (req, res) => {
   try {
@@ -324,6 +343,176 @@ router.post('/change-password', idempotency(), validate({ body: changePasswordSc
   } catch (error) {
     logger.error('Erro no change-password:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// 2FA Routes
+const twoFactorService = require('../services/twoFactorService.cjs');
+
+// GET /2fa/setup - Iniciar configuração do 2FA
+router.get('/2fa/setup', async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const user = await authRepo.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar se 2FA já está habilitado
+    const isEnabled = await twoFactorService.is2FAEnabled(req.user.id);
+    if (isEnabled) {
+      return res.status(400).json({ error: '2FA já está habilitado' });
+    }
+
+    // Gerar secret e QR code
+    const secretData = await twoFactorService.generateSecret(req.user.id, user.email);
+
+    res.json({
+      success: true,
+      secret: secretData.secret,
+      qrCode: secretData.qrCode,
+      otpauthUrl: secretData.otpauthUrl
+    });
+  } catch (error) {
+    logger.error('Erro ao configurar 2FA:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// POST /2fa/enable - Habilitar 2FA
+router.post('/2fa/enable', idempotency(), validate({ body: twoFactorSchemas.enable }), async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const { token } = req.body;
+
+    await twoFactorService.enable2FA(req.user.id, token);
+
+    // Gerar backup codes
+    const backupCodes = await twoFactorService.generateBackupCodes(req.user.id);
+
+    await logAudit({ 
+      req, 
+      action: 'enable_2fa', 
+      resourceType: 'user', 
+      resourceId: req.user.id 
+    });
+
+    res.json({
+      success: true,
+      message: '2FA habilitado com sucesso',
+      backupCodes
+    });
+  } catch (error) {
+    logger.error('Erro ao habilitar 2FA:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// POST /2fa/disable - Desabilitar 2FA
+router.post('/2fa/disable', idempotency(), validate({ body: twoFactorSchemas.disable }), async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const { token } = req.body;
+
+    await twoFactorService.disable2FA(req.user.id, token);
+
+    await logAudit({ 
+      req, 
+      action: 'disable_2fa', 
+      resourceType: 'user', 
+      resourceId: req.user.id 
+    });
+
+    res.json({
+      success: true,
+      message: '2FA desabilitado com sucesso'
+    });
+  } catch (error) {
+    logger.error('Erro ao desabilitar 2FA:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// GET /2fa/status - Verificar status do 2FA
+router.get('/2fa/status', async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const isEnabled = await twoFactorService.is2FAEnabled(req.user.id);
+
+    res.json({
+      success: true,
+      enabled: isEnabled
+    });
+  } catch (error) {
+    logger.error('Erro ao verificar status do 2FA:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// POST /2fa/backup-codes - Gerar novos backup codes
+router.post('/2fa/backup-codes', idempotency(), async (req, res) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Usuário não autenticado' });
+    }
+
+    const backupCodes = await twoFactorService.generateBackupCodes(req.user.id);
+
+    await logAudit({ 
+      req, 
+      action: 'regenerate_backup_codes', 
+      resourceType: 'user', 
+      resourceId: req.user.id 
+    });
+
+    res.json({
+      success: true,
+      backupCodes
+    });
+  } catch (error) {
+    logger.error('Erro ao gerar backup codes:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// POST /2fa/verify - Verificar token 2FA (para login)
+router.post('/2fa/verify', validate({ body: twoFactorSchemas.verify }), async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    // Esta rota é usada durante o login, então req.user pode não estar definido
+    // O userId deve vir do processo de login
+    const userId = req.body.userId; // Deve ser passado pelo processo de login
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'ID do usuário é obrigatório' });
+    }
+
+    const isValid = await twoFactorService.validateLogin2FA(userId, token);
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Token 2FA inválido' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Token 2FA válido'
+    });
+  } catch (error) {
+    logger.error('Erro ao verificar token 2FA:', error);
+    res.status(400).json({ error: error.message });
   }
 });
 

@@ -212,6 +212,8 @@ async function initializeServer() {
     app.use('/api/auth', authLimiter, require('./routes/auth.cjs'));
     app.use('/api/reports', authenticateJWT, authorizePermission(['canViewReports']));
     app.use('/api/integrations', authenticateJWT, require('./routes/integrations.cjs'));
+    app.use('/api/webhooks', authenticateJWT, require('./routes/webhooks.cjs'));
+    app.use('/api/messages', authenticateJWT, require('./routes/messages.cjs'));
     app.use('/api/automation', authenticateJWT);
     app.use('/api/marketplace', authenticateJWT);
     app.use('/api/monitoring', authenticateJWT);

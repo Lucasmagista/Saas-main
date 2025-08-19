@@ -1,161 +1,236 @@
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
+import { makeAuthenticatedRequest } from '@/utils/api';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 export interface WhatsAppSession {
   id: string;
-  name: string;
-  phone_number: string;
-  status: 'connected' | 'disconnected' | 'connecting';
+  bot_id: string;
+  session_name: string;
+  status: 'connecting' | 'connected' | 'disconnected' | 'error';
   qr_code?: string;
-  last_activity: string;
-  organization_id: string;
-  config: WhatsAppConfig;
+  phone_number?: string;
   created_at: string;
   updated_at: string;
+  last_activity?: string;
+  metadata?: any;
 }
 
-interface WhatsAppConfig {
-  phone_number?: string;
-  qr_code?: string;
+export interface WhatsAppMessage {
+  id: string;
+  session_id: string;
+  from: string;
+  to: string;
+  content: string;
+  type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'contact';
+  direction: 'in' | 'out';
+  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  timestamp: string;
+  metadata?: any;
 }
 
-export const useWhatsAppSessions = () => {
-  const { toast } = useToast();
+export interface SendMessageData {
+  to: string;
+  content: string;
+  type?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'contact';
+  metadata?: any;
+}
 
-  return useQuery({
-    queryKey: ['whatsapp-sessions'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('external_integrations')
-        .select('*')
-        .eq('type', 'whatsapp')
-        .order('created_at', { ascending: false });
+export const useWhatsAppIntegration = () => {
+  const [sessions, setSessions] = useState<WhatsAppSession[]>([]);
+  const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-      if (error) {
-        toast({
-          title: 'Erro ao carregar sessões WhatsApp',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
-      }
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions`);
+      setSessions(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar sessões WhatsApp');
+      console.error('Erro ao buscar sessões WhatsApp:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      return data.map(session => {
-        const config = session.config as WhatsAppConfig;
-        return {
-          id: session.id,
-          name: session.name,
-          phone_number: config?.phone_number || '',
-          status: session.sync_status === 'completed' ? 'connected' : 'disconnected',
-          qr_code: config?.qr_code,
-          last_activity: session.last_sync || session.updated_at,
-          organization_id: session.organization_id,
-          config: session.config,
-          created_at: session.created_at,
-          updated_at: session.updated_at,
-        };
-      }) as WhatsAppSession[];
-    },
-  });
-};
-
-export const useCreateWhatsAppSession = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (session: { name: string; phone_number: string }) => {
-      const { data, error } = await supabase
-        .from('external_integrations')
-        .insert({
-          name: session.name,
-          type: 'whatsapp',
-          config: {
-            phone_number: session.phone_number,
-            qr_code: null,
-          },
-          is_active: true,
-          sync_status: 'pending',
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-sessions'] });
-      toast({
-        title: 'Sessão WhatsApp criada',
-        description: 'Sessão criada com sucesso.',
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao criar sessão',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-};
-
-export const useGenerateQRCode = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (sessionId: string) => {
-      // Chama a API real do backend para gerar QR Code
-      const response = await fetch(`/api/whatsapp/sessions/${sessionId}/qrcode`, {
+  const createSession = async (botId: string, sessionName: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
+        data: { bot_id: botId, session_name: sessionName },
       });
+      setSessions(prev => [...prev, response.data]);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar sessão WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error('Falha ao gerar QR Code');
-      }
-
-      const data = await response.json();
+  const startSession = async (sessionId: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/start`, {
+        method: 'POST',
+      });
       
-      if (!data.qr_code) {
-        throw new Error('QR Code não disponível no momento');
+      // Atualizar sessão com QR code se retornado
+      if (response.data.qr_code) {
+        setSessions(prev => prev.map(session => 
+          session.id === sessionId 
+            ? { ...session, qr_code: response.data.qr_code, status: 'connecting' }
+            : session
+        ));
       }
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao iniciar sessão WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-      // Atualiza a sessão no banco com o QR Code real
-      const { data: updatedSession, error } = await supabase
-        .from('external_integrations')
-        .update({
-          config: {
-            qr_code: data.qr_code,
-          },
-          sync_status: 'pending',
-        })
-        .eq('id', sessionId)
-        .select()
-        .single();
+  const stopSession = async (sessionId: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/stop`, {
+        method: 'POST',
+      });
+      
+      // Atualizar status da sessão
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, status: 'disconnected', qr_code: undefined }
+          : session
+      ));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao parar sessão WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-      if (error) throw error;
-      return { ...updatedSession, qr_code: data.qr_code };
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-sessions'] });
-      toast({
-        title: 'QR Code gerado',
-        description: 'Escaneie o QR Code com seu WhatsApp para conectar.',
+  const deleteSession = async (sessionId: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}`, {
+        method: 'DELETE',
       });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Erro ao gerar QR Code',
-        description: error.message || 'Falha na geração do QR Code',
-        variant: 'destructive',
+      setSessions(prev => prev.filter(session => session.id !== sessionId));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar sessão WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const getSessionQrCode = async (sessionId: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/qrcode`);
+      return response.data.qr_code;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao obter QR code da sessão';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const fetchMessages = async (sessionId: string) => {
+    try {
+      setError(null);
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/messages`);
+      setMessages(response.data);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao carregar mensagens WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const sendMessage = async (sessionId: string, messageData: SendMessageData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/messages`, {
+        method: 'POST',
+        data: messageData,
       });
-    },
-  });
+      
+      setMessages(prev => [...prev, response.data]);
+      
+      // Atualizar última atividade da sessão
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, last_activity: new Date().toISOString() }
+          : session
+      ));
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao enviar mensagem WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const getSessionStatus = async (sessionId: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}/status`);
+      
+      // Atualizar status da sessão
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId 
+          ? { ...session, status: response.data.status, phone_number: response.data.phone_number }
+          : session
+      ));
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao obter status da sessão';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const updateSession = async (sessionId: string, updates: Partial<WhatsAppSession>) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/whatsapp/sessions/${sessionId}`, {
+        method: 'PUT',
+        data: updates,
+      });
+      
+      setSessions(prev => prev.map(session => 
+        session.id === sessionId ? response.data : session
+      ));
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar sessão WhatsApp';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  return {
+    sessions,
+    messages,
+    loading,
+    error,
+    fetchSessions,
+    createSession,
+    startSession,
+    stopSession,
+    deleteSession,
+    getSessionQrCode,
+    fetchMessages,
+    sendMessage,
+    getSessionStatus,
+    updateSession,
+  };
 };

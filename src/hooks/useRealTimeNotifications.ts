@@ -1,203 +1,182 @@
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect, useCallback } from 'react';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-interface Notification {
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+export interface Notification {
   id: string;
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
   read: boolean;
-  data: any;
   created_at: string;
+  user_id: string;
+  data?: any;
+}
+
+export interface CreateNotificationData {
+  title: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  data?: any;
 }
 
 export const useRealTimeNotifications = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const { user } = useAuth();
-  const { toast } = useToast();
 
-  useEffect(() => {
-    if (!user) return;
+  // Polling para simular tempo real (em produção, usar WebSocket)
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-    // Buscar notificações existentes
-    const fetchNotifications = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (error) {
-          console.error('Error fetching notifications:', error);
-          // Se a tabela não existir, usar dados mock
-          setNotifications(getMockNotifications());
-          setUnreadCount(2);
-          return;
-        }
-
-        // Mapear os dados para o tipo correto
-        const mappedNotifications: Notification[] = (data || []).map(notification => ({
-          id: notification.id,
-          title: notification.title,
-          message: notification.message,
-          type: ['info', 'success', 'warning', 'error'].includes(notification.type) 
-            ? notification.type as 'info' | 'success' | 'warning' | 'error'
-            : 'info',
-          read: notification.read,
-          data: notification.data,
-          created_at: notification.created_at,
-      }));
-
-      setNotifications(mappedNotifications);
-      setUnreadCount(mappedNotifications.filter(n => !n.read).length);
-    } catch (error) {
-      console.error('Error in fetchNotifications:', error);
-      // Em caso de erro, usar dados mock
-      setNotifications(getMockNotifications());
-      setUnreadCount(2);
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setError(null);
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications`);
+      setNotifications(response.data);
+      setUnreadCount(response.data.filter((n: Notification) => !n.read).length);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar notificações');
+      console.error('Erro ao buscar notificações:', err);
+    } finally {
+      setLoading(false);
     }
-    };
+  }, []);
 
-    fetchNotifications();
+  const createNotification = async (notificationData: CreateNotificationData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications`, {
+        method: 'POST',
+        data: notificationData,
+      });
+      setNotifications(prev => [response.data, ...prev]);
+      setUnreadCount(prev => prev + 1);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-    // Configurar real-time para novas notificações
-    const channel = supabase
-      .channel('notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          const rawNotification = payload.new as any;
-          const newNotification: Notification = {
-            id: rawNotification.id,
-            title: rawNotification.title,
-            message: rawNotification.message,
-            type: ['info', 'success', 'warning', 'error'].includes(rawNotification.type) 
-              ? rawNotification.type as 'info' | 'success' | 'warning' | 'error'
-              : 'info',
-            read: rawNotification.read,
-            data: rawNotification.data,
-            created_at: rawNotification.created_at,
-          };
-          
-          setNotifications(prev => [newNotification, ...prev]);
-          setUnreadCount(prev => prev + 1);
-          
-          // Mostrar toast para nova notificação
-          toast({
-            title: newNotification.title,
-            description: newNotification.message,
-            variant: newNotification.type === 'error' ? 'destructive' : 'default',
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          const rawNotification = payload.new as any;
-          const updatedNotification: Notification = {
-            id: rawNotification.id,
-            title: rawNotification.title,
-            message: rawNotification.message,
-            type: ['info', 'success', 'warning', 'error'].includes(rawNotification.type) 
-              ? rawNotification.type as 'info' | 'success' | 'warning' | 'error'
-              : 'info',
-            read: rawNotification.read,
-            data: rawNotification.data,
-            created_at: rawNotification.created_at,
-          };
-          
-          setNotifications(prev => 
-            prev.map(n => n.id === updatedNotification.id ? updatedNotification : n)
-          );
-          
-          if (updatedNotification.read) {
-            setUnreadCount(prev => Math.max(0, prev - 1));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, toast]);
-
-  const markAsRead = async (notificationId: string) => {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', notificationId);
-
-    if (error) {
-      console.error('Error marking notification as read:', error);
+  const markAsRead = async (id: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/${id}/read`, {
+        method: 'PUT',
+      });
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id ? { ...notification, read: true } : notification
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao marcar notificação como lida';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
   };
 
   const markAllAsRead = async () => {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', user?.id)
-      .eq('read', false);
-
-    if (error) {
-      console.error('Error marking all notifications as read:', error);
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/read-all`, {
+        method: 'PUT',
+      });
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+      setUnreadCount(0);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao marcar todas as notificações como lidas';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
   };
 
+  const deleteNotification = async (id: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/${id}`, {
+        method: 'DELETE',
+      });
+      const notification = notifications.find(n => n.id === id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      if (notification && !notification.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/clear-all`, {
+        method: 'DELETE',
+      });
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao limpar notificações';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  // Iniciar polling para simular tempo real
+  const startPolling = useCallback(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+    
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 10000); // Poll a cada 10 segundos
+    
+    setPollingInterval(interval);
+  }, [fetchNotifications, pollingInterval]);
+
+  // Parar polling
+  const stopPolling = useCallback(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  }, [pollingInterval]);
+
+  useEffect(() => {
+    fetchNotifications();
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+  }, [fetchNotifications, startPolling, stopPolling]);
+
+  // Cleanup no unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
+
   return {
     notifications,
+    loading,
+    error,
     unreadCount,
+    fetchNotifications,
+    createNotification,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
+    clearAllNotifications,
+    startPolling,
+    stopPolling,
   };
 };
-
-// Função para gerar notificações mock caso a tabela não exista
-const getMockNotifications = (): Notification[] => [
-  {
-    id: '1',
-    title: 'Bem-vindo ao Sistema!',
-    message: 'Sistema carregado com sucesso. Todas as funcionalidades estão disponíveis.',
-    type: 'success',
-    read: false,
-    data: null,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    title: 'Dashboard Ativo',
-    message: 'Seus dados estão sendo carregados em tempo real.',
-    type: 'info',
-    read: false,
-    data: null,
-    created_at: new Date(Date.now() - 300000).toISOString(), // 5 minutos atrás
-  },
-  {
-    id: '3',
-    title: 'Sistema Operacional',
-    message: 'Todas as integrações estão funcionando corretamente.',
-    type: 'success',
-    read: true,
-    data: null,
-    created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hora atrás
-  },
-];

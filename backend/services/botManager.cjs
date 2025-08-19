@@ -58,7 +58,7 @@ async function startSession(bot) {
       }
       botsRepo.update(botId, { qrcode: qrCode, is_active: true, session_name: sessionName, updated_at: new Date().toISOString() })
         .catch((error) => {
-          console.error('Erro ao atualizar QR code no Supabase:', error);
+          console.error('Erro ao atualizar QR code no banco:', error);
         });
     });
     // Captura mensagens para armazenar logs em memória
@@ -70,14 +70,14 @@ async function startSession(bot) {
         type: message.type || null,
       });
 
-      // Persiste log no Supabase. Caso ocorra erro, apenas registra no console.
+      // Persiste log no banco local. Caso ocorra erro, apenas registra no console.
       botLogsRepo.insert({
         bot_id: botId,
         direction: message.fromMe ? 'sent' : 'received',
         message: message.body || '',
         type: message.type || null,
       }).catch((error) => {
-        console.error('Erro ao inserir log de bot no Supabase:', error);
+        console.error('Erro ao inserir log de bot no banco:', error);
       });
 
       // Persiste também log de multi-sessão, caso exista uma sessão correspondente.
@@ -87,7 +87,7 @@ async function startSession(bot) {
         message: message.body || '',
         type: message.type || null,
       }).catch((error) => {
-        console.error('Erro ao inserir log de multi-sessão no Supabase:', error);
+        console.error('Erro ao inserir log de multi-sessão no banco:', error);
       });
 
       // Atualiza last_message e status na sessão persistida
@@ -145,10 +145,10 @@ async function stopSession(botId) {
   }
   delete sessions[botId];
 
-  // Atualiza status e remove QR code no Supabase
+  // Atualiza status e remove QR code no banco local
   botsRepo.update(botId, { is_active: false, qrcode: null, updated_at: new Date().toISOString() })
     .catch((error) => {
-      console.error('Erro ao atualizar status do bot no Supabase ao encerrar sessão:', error);
+      console.error('Erro ao atualizar status do bot no banco ao encerrar sessão:', error);
     });
   // Atualiza status da sessão persistida
   botSessionsRepo.update(botId, { status: 'inactive', qr_data: null })

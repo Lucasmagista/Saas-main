@@ -1,175 +1,170 @@
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-export interface PushNotification {
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+export interface Notification {
   id: string;
-  organization_id: string;
-  user_id: string;
   title: string;
   message: string;
-  type: string;
-  category: string;
-  action_url: string;
-  metadata: any;
-  is_read: boolean;
-  sent_at: string;
-  read_at: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read: boolean;
+  created_at: string;
+  user_id: string;
+  data?: any;
 }
 
-export interface NotificationPreference {
-  id: string;
-  user_id: string;
-  organization_id: string;
-  email_notifications: boolean;
-  push_notifications: boolean;
-  sms_notifications: boolean;
-  notification_types: any;
-  created_at: string;
-  updated_at: string;
+export interface CreateNotificationData {
+  title: string;
+  message: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  data?: any;
 }
 
 export const useNotifications = () => {
-  const { toast } = useToast();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  return useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('push_notifications')
-        .select('*')
-        .order('sent_at', { ascending: false })
-        .limit(50);
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications`);
+      setNotifications(response.data);
+      setUnreadCount(response.data.filter((n: Notification) => !n.read).length);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar notificações');
+      console.error('Erro ao buscar notificações:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (error) {
-        toast({
-          title: 'Erro ao carregar notificações',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
+  const createNotification = async (notificationData: CreateNotificationData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications`, {
+        method: 'POST',
+        data: notificationData,
+      });
+      setNotifications(prev => [response.data, ...prev]);
+      setUnreadCount(prev => prev + 1);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const markAsRead = async (id: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/${id}/read`, {
+        method: 'PUT',
+      });
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id ? { ...notification, read: true } : notification
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao marcar notificação como lida';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/read-all`, {
+        method: 'PUT',
+      });
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+      setUnreadCount(0);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao marcar todas as notificações como lidas';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/${id}`, {
+        method: 'DELETE',
+      });
+      const notification = notifications.find(n => n.id === id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      if (notification && !notification.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
       }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-      return data as PushNotification[];
-    },
-  });
-};
-
-export const useNotificationPreferences = () => {
-  const { toast } = useToast();
-
-  return useQuery({
-    queryKey: ['notification-preferences'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('notification_preferences')
-        .select('*')
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        toast({
-          title: 'Erro ao carregar preferências',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
-      }
-
-      return data as NotificationPreference | null;
-    },
-  });
-};
-
-export const useUpdateNotificationPreferences = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (preferences: Partial<NotificationPreference>) => {
-      const { data: user } = await supabase.auth.getUser();
-      
-      if (!user.user) throw new Error('Usuário não autenticado');
-
-      const { data, error } = await supabase
-        .from('notification_preferences')
-        .upsert({
-          user_id: user.user.id,
-          organization_id: preferences.organization_id,
-          ...preferences,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
-      toast({
-        title: 'Preferências atualizadas',
-        description: 'Suas preferências de notificação foram atualizadas.',
+  const clearAllNotifications = async () => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/notifications/clear-all`, {
+        method: 'DELETE',
       });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao atualizar preferências',
-        description: error.message,
-        variant: 'destructive',
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao limpar notificações';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const getNotificationSettings = async () => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications/settings`);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao carregar configurações de notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const updateNotificationSettings = async (settings: any) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications/settings`, {
+        method: 'PUT',
+        data: settings,
       });
-    },
-  });
-};
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar configurações de notificação';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-export const useMarkNotificationAsRead = () => {
-  const queryClient = useQueryClient();
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
-  return useMutation({
-    mutationFn: async (notificationId: string) => {
-      const { error } = await supabase
-        .from('push_notifications')
-        .update({ 
-          is_read: true, 
-          read_at: new Date().toISOString() 
-        })
-        .eq('id', notificationId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    },
-  });
-};
-
-export const useCreateNotification = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (notification: Omit<PushNotification, 'id' | 'sent_at' | 'read_at' | 'is_read'>) => {
-      const { data, error } = await supabase
-        .from('push_notifications')
-        .insert(notification)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      toast({
-        title: 'Notificação criada',
-        description: 'Notificação enviada com sucesso.',
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao criar notificação',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+  return {
+    notifications,
+    loading,
+    error,
+    unreadCount,
+    fetchNotifications,
+    createNotification,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAllNotifications,
+    getNotificationSettings,
+    updateNotificationSettings,
+  };
 };

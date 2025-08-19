@@ -1,228 +1,213 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-// Define a Json type since '@supabase/supabase-js' does not export it
-type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
+import { makeAuthenticatedRequest } from '../utils/api';
+import { toast } from 'react-hot-toast';
 
-export interface AutomationRule {
-  id: string;
-  organization_id: string;
-  name: string;
-  trigger_type: string;
-  trigger_conditions: Json;
-  action_type: string;
-  action_config: Json;
-  is_active: boolean;
-  priority: number;
-  usage_count: number;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
-export interface Chatbot {
+export interface Automation {
   id: string;
-  organization_id: string;
   name: string;
   description: string;
-  channel: string;
-  config: Json;
-  knowledge_base: Json;
+  trigger_type: 'event' | 'schedule' | 'manual';
+  trigger_config: any;
+  actions: AutomationAction[];
   is_active: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
 }
 
-export const useAutomationRules = () => {
-  const { toast } = useToast();
+export interface AutomationAction {
+  id: string;
+  type: 'email' | 'sms' | 'webhook' | 'notification' | 'task';
+  config: any;
+  order: number;
+}
 
+export interface AutomationExecution {
+  id: string;
+  automation_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  trigger_data: any;
+  result: any;
+  error_message?: string;
+  started_at: string;
+  completed_at?: string;
+}
+
+// Hooks para Automações
+export const useAutomations = (filters?: any) => {
   return useQuery({
-    queryKey: ['automation-rules'],
+    queryKey: ['automations', filters],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('automation_rules')
-          .select('*')
-          .order('priority', { ascending: true });
-
-        if (error) {
-          console.error('Erro ao carregar regras de automação:', error);
-          toast({
-            title: 'Erro ao carregar regras de automação',
-            description: error.message,
-            variant: 'destructive',
-          });
-          return []; // Retorna array vazio em caso de erro
-        }
-
-        return (data || []) as AutomationRule[];
-      } catch (error) {
-        console.error('Erro inesperado ao carregar regras:', error);
-        return []; // Sempre retorna array
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.append(key, String(value));
+        });
       }
-    },
+      
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows?${params}`);
+      return response.data;
+    }
   });
 };
 
-export const useCreateAutomationRule = () => {
+export const useCreateAutomation = () => {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-
+  
   return useMutation({
-    mutationFn: async (rule: Omit<AutomationRule, 'id' | 'created_at' | 'updated_at' | 'usage_count'>) => {
-      const { data, error } = await supabase
-        .from('automation_rules')
-        .insert(rule)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async (automationData: Partial<Automation>) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows`, {
+        method: 'POST',
+        data: automationData
+      });
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-rules'] });
-      toast({
-        title: 'Regra criada',
-        description: 'Regra de automação criada com sucesso.',
-      });
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      toast.success('Automação criada com sucesso!');
     },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao criar regra',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao criar automação');
+    }
   });
 };
 
-export const useUpdateAutomationRule = () => {
+export const useUpdateAutomation = () => {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-
+  
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<AutomationRule> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('automation_rules')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async ({ id, ...automationData }: Partial<Automation> & { id: string }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows/${id}`, {
+        method: 'PUT',
+        data: automationData
+      });
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation-rules'] });
-      toast({
-        title: 'Regra atualizada',
-        description: 'Regra de automação atualizada com sucesso.',
-      });
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      toast.success('Automação atualizada com sucesso!');
     },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao atualizar regra',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao atualizar automação');
+    }
   });
 };
 
-export const useChatbots = () => {
-  const { toast } = useToast();
+export const useDeleteAutomation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows/${id}`, {
+        method: 'DELETE'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      toast.success('Automação removida com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao remover automação');
+    }
+  });
+};
 
+export const useToggleAutomation = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows/${id}/toggle`, {
+        method: 'POST',
+        data: { is_active }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      toast.success('Status da automação alterado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao alterar status da automação');
+    }
+  });
+};
+
+// Hooks para Execuções
+export const useAutomationExecutions = (automationId?: string) => {
   return useQuery({
-    queryKey: ['chatbots'],
+    queryKey: ['automation-executions', automationId],
     queryFn: async () => {
-      try {
-        const { data, error } = await supabase
-          .from('chatbots')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Erro ao carregar chatbots:', error);
-          toast({
-            title: 'Erro ao carregar chatbots',
-            description: error.message,
-            variant: 'destructive',
-          });
-          return []; // Retorna array vazio em caso de erro
-        }
-
-        return (data || []) as Chatbot[];
-      } catch (error) {
-        console.error('Erro inesperado ao carregar chatbots:', error);
-        return []; // Sempre retorna array
-      }
-    },
+      const params = automationId ? `?automation_id=${automationId}` : '';
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/executions${params}`);
+      return response.data;
+    }
   });
 };
 
-export const useCreateChatbot = () => {
+export const useRunAutomation = () => {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-
+  
   return useMutation({
-    mutationFn: async (chatbot: Omit<Chatbot, 'id' | 'created_at' | 'updated_at'>) => {
-      const { data, error } = await supabase
-        .from('chatbots')
-        .insert(chatbot)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async ({ id, trigger_data }: { id: string; trigger_data?: any }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/workflows/${id}/run`, {
+        method: 'POST',
+        data: { trigger_data }
+      });
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chatbots'] });
-      toast({
-        title: 'Chatbot criado',
-        description: 'Chatbot criado com sucesso.',
-      });
+      queryClient.invalidateQueries({ queryKey: ['automation-executions'] });
+      toast.success('Automação executada com sucesso!');
     },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao criar chatbot',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao executar automação');
+    }
   });
 };
 
-export const useUpdateChatbot = () => {
+// Hooks para Templates de Automação
+export const useAutomationTemplates = () => {
+  return useQuery({
+    queryKey: ['automation-templates'],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/templates`);
+      return response.data;
+    }
+  });
+};
+
+export const useCreateFromTemplate = () => {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
-
+  
   return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<Chatbot> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('chatbots')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+    mutationFn: async ({ template_id, name, description }: { template_id: string; name: string; description?: string }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/templates/${template_id}/create`, {
+        method: 'POST',
+        data: { name, description }
+      });
+      return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chatbots'] });
-      toast({
-        title: 'Chatbot atualizado',
-        description: 'Chatbot atualizado com sucesso.',
-      });
+      queryClient.invalidateQueries({ queryKey: ['automations'] });
+      toast.success('Automação criada a partir do template!');
     },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao atualizar chatbot',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao criar automação do template');
+    }
+  });
+};
+
+// Hooks para Analytics de Automação
+export const useAutomationAnalytics = (timeRange = '30d') => {
+  return useQuery({
+    queryKey: ['automation-analytics', timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/automation/analytics?timeRange=${timeRange}`);
+      return response.data;
+    }
   });
 };

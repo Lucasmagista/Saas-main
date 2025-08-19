@@ -1,123 +1,276 @@
 
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { makeAuthenticatedRequest } from '@/utils/api';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
 interface Opportunity {
-  stage: string | null;
-  value: number | null;
+  id: string;
+  title: string;
+  stage: string;
+  value: number;
+  probability: number;
+  expected_close_date: string;
+  lead_id: string;
+  assigned_to: string;
+  created_at: string;
 }
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Plus, ArrowRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface StageData {
-  name: string;
+interface PipelineStage {
+  stage: string;
   count: number;
   value: number;
+  probability: number;
   color: string;
 }
 
 /**
- * Exibe o pipeline de vendas utilizando dados reais do banco de dados.  
- * Em vez de exibir números estáticos, o componente consulta a tabela
- * `opportunities` do Supabase e agrupa as oportunidades por etapa (`stage`).
- * O resultado é um array de estágios com a quantidade de oportunidades e
- * o valor total de cada etapa.  Cores são atribuídas dinamicamente com
- * base no índice do estágio.
+ * Componente de Pipeline de Vendas que utiliza dados reais da API backend.
+ * 
+ * Este componente calcula automaticamente as métricas do pipeline baseadas na tabela
+ * `opportunities` do backend e agrupa as oportunidades por etapa (`stage`).
  */
-export const SalesPipeline = () => {
-  const [stages, setStages] = useState<StageData[]>([]);
+export const SalesPipeline: React.FC = () => {
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  const fetchOpportunities = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/opportunities`);
+      const opportunitiesData: Opportunity[] = response.data || [];
+      setOpportunities(opportunitiesData);
+
+      // Calcular estágios do pipeline
+      const stages = calculatePipelineStages(opportunitiesData);
+      setPipelineStages(stages);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar oportunidades');
+      console.error('Erro ao buscar oportunidades:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculatePipelineStages = (opps: Opportunity[]): PipelineStage[] => {
+    const stageConfig = [
+      { stage: 'qualified', label: 'Qualificadas', color: 'bg-blue-500' },
+      { stage: 'proposal', label: 'Propostas', color: 'bg-yellow-500' },
+      { stage: 'negotiation', label: 'Negociação', color: 'bg-orange-500' },
+      { stage: 'closed', label: 'Fechadas', color: 'bg-green-500' },
+      { stage: 'lost', label: 'Perdidas', color: 'bg-red-500' }
+    ];
+
+    return stageConfig.map(config => {
+      const stageOpps = opps.filter(opp => opp.stage === config.stage);
+      const count = stageOpps.length;
+      const value = stageOpps.reduce((sum, opp) => sum + (opp.value || 0), 0);
+      const avgProbability = count > 0 
+        ? stageOpps.reduce((sum, opp) => sum + (opp.probability || 0), 0) / count 
+        : 0;
+
+      return {
+        stage: config.label,
+        count,
+        value,
+        probability: avgProbability,
+        color: config.color
+      };
+    });
+  };
+
+  const getTotalValue = () => {
+    return opportunities.reduce((sum, opp) => sum + (opp.value || 0), 0);
+  };
+
+  const getWeightedValue = () => {
+    return opportunities.reduce((sum, opp) => {
+      const probability = opp.probability || 0;
+      return sum + ((opp.value || 0) * probability / 100);
+    }, 0);
+  };
+
+  const getAverageDealSize = () => {
+    if (opportunities.length === 0) return 0;
+    return getTotalValue() / opportunities.length;
+  };
+
+  const getWinRate = () => {
+    const closed = opportunities.filter(opp => opp.stage === 'closed').length;
+    const total = opportunities.filter(opp => 
+      ['closed', 'lost'].includes(opp.stage)
+    ).length;
+    return total > 0 ? (closed / total) * 100 : 0;
+  };
 
   useEffect(() => {
-    const colorPalette = [
-      "bg-blue-500",
-      "bg-yellow-500",
-      "bg-orange-500",
-      "bg-purple-500",
-      "bg-green-500",
-      "bg-red-500",
-      "bg-pink-500",
-      "bg-indigo-500",
-    ];
-    const fetchData = async () => {
-      try {
-        const { data: dataRaw, error } = await supabase
-          .from('opportunities')
-          .select('stage, value');
-        const data = dataRaw as Opportunity[] | null;
-        if (error) {
-          console.error('Erro ao buscar oportunidades:', error.message);
-          return;
-        }
-        const grouped: Record<string, StageData> = {};
-        (data || []).forEach((op) => {
-          const name = op.stage || 'Sem estágio';
-          if (!grouped[name]) {
-            const color = colorPalette[Object.keys(grouped).length % colorPalette.length];
-            grouped[name] = { name, count: 0, value: 0, color };
-          }
-          grouped[name].count += 1;
-          // Some opportunities might not have a value defined; treat undefined as 0
-          grouped[name].value += Number(op.value ?? 0);
-        });
-        setStages(Object.values(grouped));
-      } catch (err) {
-        console.error('Erro inesperado ao carregar pipeline:', err);
-      }
-    };
-    fetchData();
+    fetchOpportunities();
   }, []);
 
-  // Determine the maximum count to normalizar a barra de progresso
-  const maxCount = stages.reduce((acc, s) => Math.max(acc, s.count), 1);
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Pipeline de Vendas</CardTitle>
+          <CardDescription>Carregando dados...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Pipeline de Vendas</CardTitle>
+          <CardDescription>Erro ao carregar dados: {error}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const totalValue = getTotalValue();
+  const weightedValue = getWeightedValue();
+  const averageDealSize = getAverageDealSize();
+  const winRate = getWinRate();
+  const totalOpps = opportunities.length;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Pipeline de Vendas</h2>
-          <p className="text-muted-foreground">Acompanhe oportunidades em cada etapa</p>
-        </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Oportunidade
-        </Button>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              R$ {totalValue.toLocaleString('pt-BR')}
+            </div>
+            <p className="text-xs text-muted-foreground">Valor total do pipeline</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Valor Ponderado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              R$ {weightedValue.toLocaleString('pt-BR')}
+            </div>
+            <p className="text-xs text-muted-foreground">Baseado na probabilidade</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              R$ {averageDealSize.toLocaleString('pt-BR')}
+            </div>
+            <p className="text-xs text-muted-foreground">Valor médio por oportunidade</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Taxa de Conversão</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{winRate.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">Oportunidades fechadas</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        {stages.length === 0 && (
-          <p className="col-span-5 text-center text-muted-foreground">Nenhum dado de oportunidades encontrado.</p>
-        )}
-        {stages.map((stage, index) => (
-          <Card key={stage.name} className="relative">
-            <CardHeader className="pb-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Pipeline por Estágio</CardTitle>
+          <CardDescription>Distribuição de oportunidades e valores por estágio</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {pipelineStages.map((stage) => (
+            <div key={stage.stage} className="space-y-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">{stage.name}</CardTitle>
-                <div className={`w-3 h-3 rounded-full ${stage.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="text-2xl font-bold">{stage.count}</div>
-                <div className="text-sm text-muted-foreground">
-                  R$ {stage.value.toLocaleString()}
+                <div className="flex items-center space-x-4">
+                  <Badge variant="outline">{stage.count}</Badge>
+                  <div>
+                    <div className="font-medium">{stage.stage}</div>
+                    <div className="text-sm text-muted-foreground">
+                      R$ {stage.value.toLocaleString('pt-BR')} • {stage.probability.toFixed(0)}% prob.
+                    </div>
+                  </div>
                 </div>
-                <Progress
-                  value={maxCount > 0 ? (stage.count / maxCount) * 100 : 0}
-                  className="h-2"
-                />
+                <div className="text-right">
+                  <div className="text-sm font-medium">
+                    {totalOpps > 0 ? ((stage.count / totalOpps) * 100).toFixed(1) : 0}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {totalValue > 0 ? ((stage.value / totalValue) * 100).toFixed(1) : 0}% do valor
+                  </div>
+                </div>
               </div>
-            </CardContent>
-            {index < stages.length - 1 && (
-              <div className="absolute -right-2 top-1/2 transform -translate-y-1/2 z-10">
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
+              <Progress 
+                value={totalOpps > 0 ? (stage.count / totalOpps) * 100 : 0} 
+                className="h-2" 
+              />
+            </div>
+          ))}
+          
+          {pipelineStages.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhuma oportunidade encontrada.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Oportunidades Recentes</CardTitle>
+          <CardDescription>Últimas oportunidades adicionadas ao pipeline</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {opportunities
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .slice(0, 5)
+              .map((opp) => (
+                <div key={opp.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <div className="font-medium">{opp.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {opp.stage} • {opp.probability}% de probabilidade
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium">
+                      R$ {opp.value.toLocaleString('pt-BR')}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(opp.expected_close_date).toLocaleDateString('pt-BR')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            
+            {opportunities.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Nenhuma oportunidade encontrada.
+              </p>
             )}
-          </Card>
-        ))}
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

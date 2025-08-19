@@ -1,262 +1,183 @@
-// Tipos para dados vindos do Supabase
-interface Lead {
-  id: string;
-}
+// Tipos para dados vindos da API backend
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-interface Opportunity {
-  stage: string | null;
-  value: number | null;
-}
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
-
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { TrendingDown, Users, Target, DollarSign } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-
-interface FunnelStage {
+interface FunnelData {
   stage: string;
   count: number;
   percentage: number;
-  color: string;
+  value: number;
 }
 
-interface ConversionMetric {
-  totalConversion: number;
-  bestConversion: number;
-  worstConversion: number;
-  bestStageLabel: string;
-  worstStageLabel: string;
-  averageValue: number;
+interface Lead {
+  id: string;
+  status: string;
+  created_at: string;
+}
+
+interface Opportunity {
+  id: string;
+  stage: string;
+  value: number;
+  created_at: string;
 }
 
 /**
- * Componente para visualização do funil de conversão.  
- * Este componente calcula dinamicamente as etapas com base na quantidade de
- * leads e oportunidades cadastradas no Supabase.  Para cada etapa o número
- * de registros e a percentagem relativa à etapa inicial (Leads) são
- * calculados.  Métricas como taxa total de conversão, melhor etapa,
- * maior perda e valor médio das oportunidades também são extraídas a partir
- * dos dados reais.
+ * Componente de Funil de Conversão que utiliza dados reais da API backend.
+ * 
+ * Este componente calcula automaticamente as métricas de conversão baseadas nas
+ * leads e oportunidades cadastradas no backend.  Para cada etapa o número
+ * de leads/oportunidades é contado e a porcentagem de conversão é calculada.
+ * 
+ * O funil segue o fluxo: Leads → Qualificadas → Propostas → Negociação → Fechadas
  */
-export const ConversionFunnel = () => {
-  const [stages, setStages] = useState<FunnelStage[]>([]);
-  const [metrics, setMetrics] = useState<ConversionMetric>({
-    totalConversion: 0,
-    bestConversion: 0,
-    worstConversion: 0,
-    bestStageLabel: '-',
-    worstStageLabel: '-',
-    averageValue: 0,
-  });
+export const ConversionFunnel: React.FC = () => {
+  const [funnelData, setFunnelData] = useState<FunnelData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  const calculateFunnel = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Buscar leads da API
+      const leadsResponse = await makeAuthenticatedRequest(`${API_BASE}/api/leads`);
+      const leads: Lead[] = leadsResponse.data || [];
+
+      // Buscar oportunidades da API
+      const oppsResponse = await makeAuthenticatedRequest(`${API_BASE}/api/opportunities`);
+      const opportunities: Opportunity[] = oppsResponse.data || [];
+
+      // Calcular métricas do funil
+      const totalLeads = leads.length;
+      const qualifiedLeads = leads.filter(lead => lead.status === 'qualified').length;
+      const proposals = opportunities.filter(opp => opp.stage === 'proposal').length;
+      const negotiations = opportunities.filter(opp => opp.stage === 'negotiation').length;
+      const closed = opportunities.filter(opp => opp.stage === 'closed').length;
+
+      // Calcular valores
+      const totalValue = opportunities.reduce((sum, opp) => sum + (opp.value || 0), 0);
+      const closedValue = opportunities
+        .filter(opp => opp.stage === 'closed')
+        .reduce((sum, opp) => sum + (opp.value || 0), 0);
+
+      // Criar dados do funil
+      const funnel: FunnelData[] = [
+        {
+          stage: 'Leads',
+          count: totalLeads,
+          percentage: 100,
+          value: 0
+        },
+        {
+          stage: 'Qualificadas',
+          count: qualifiedLeads,
+          percentage: totalLeads > 0 ? (qualifiedLeads / totalLeads) * 100 : 0,
+          value: 0
+        },
+        {
+          stage: 'Propostas',
+          count: proposals,
+          percentage: totalLeads > 0 ? (proposals / totalLeads) * 100 : 0,
+          value: 0
+        },
+        {
+          stage: 'Negociação',
+          count: negotiations,
+          percentage: totalLeads > 0 ? (negotiations / totalLeads) * 100 : 0,
+          value: 0
+        },
+        {
+          stage: 'Fechadas',
+          count: closed,
+          percentage: totalLeads > 0 ? (closed / totalLeads) * 100 : 0,
+          value: closedValue
+        }
+      ];
+
+      setFunnelData(funnel);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar dados do funil');
+      console.error('Erro ao calcular funil:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const colors = [
-      'bg-blue-500',
-      'bg-green-500',
-      'bg-yellow-500',
-      'bg-orange-500',
-      'bg-red-500',
-      'bg-purple-500',
-    ];
-    const fetchData = async () => {
-      try {
-        const { data: leadsRaw, error: leadsError } = await supabase
-          .from('leads')
-          .select('id');
-        const leads = leadsRaw as Lead[] | null;
-        if (leadsError) {
-          console.error('Erro ao buscar leads:', leadsError.message);
-          return;
-        }
-        const { data: oppsRaw, error: oppsError } = await supabase
-          .from('opportunities')
-          .select('stage, value');
-        const opps = oppsRaw as Opportunity[] | null;
-        if (oppsError) {
-          console.error('Erro ao buscar oportunidades:', oppsError.message);
-          return;
-        }
-        const leadsCount = (leads || []).length;
-        // Agrupar oportunidades por estágio
-        const oppGrouped: Record<string, { count: number; valueSum: number }> = {};
-        (opps || []).forEach((o) => {
-          const stageName = o.stage || 'Outro';
-          if (!oppGrouped[stageName]) {
-            oppGrouped[stageName] = { count: 0, valueSum: 0 };
-          }
-          oppGrouped[stageName].count += 1;
-          oppGrouped[stageName].valueSum += Number(o.value ?? 0);
-        });
-        // Construir lista de etapas iniciando por Leads
-        const stageEntries: FunnelStage[] = [];
-        // Primeira etapa são os leads
-        stageEntries.push({
-          stage: 'Leads',
-          count: leadsCount,
-          percentage: 100,
-          color: colors[0],
-        });
-        // Demais etapas provenientes das oportunidades agrupadas
-        let colorIndex = 1;
-        Object.keys(oppGrouped)
-          .sort((a, b) => oppGrouped[b].count - oppGrouped[a].count)
-          .forEach((stage) => {
-            const count = oppGrouped[stage].count;
-            const percentage = leadsCount > 0 ? (count / leadsCount) * 100 : 0;
-            stageEntries.push({
-              stage,
-              count,
-              percentage: Number(percentage.toFixed(2)),
-              color: colors[colorIndex % colors.length],
-            });
-            colorIndex += 1;
-          });
-        setStages(stageEntries);
-        // Calcular métricas adicionais
-        if (stageEntries.length >= 2) {
-          const convRates: number[] = [];
-          let bestIndex = 0;
-          let worstIndex = 0;
-          for (let i = 0; i < stageEntries.length - 1; i++) {
-            const rate = stageEntries[i].count > 0 ? (stageEntries[i + 1].count / stageEntries[i].count) * 100 : 0;
-            convRates.push(rate);
-            if (i === 0 || rate > convRates[bestIndex]) bestIndex = i;
-            if (i === 0 || rate < convRates[worstIndex]) worstIndex = i;
-          }
-          const totalConv = stageEntries.length > 1 && stageEntries[0].count > 0
-            ? (stageEntries[stageEntries.length - 1].count / stageEntries[0].count) * 100
-            : 0;
-          // Calcular valor médio das oportunidades
-          const oppValues = (opps || []).map((o) => Number(o.value ?? 0));
-          const avgValue = oppValues.length ? oppValues.reduce((a, v) => a + v, 0) / oppValues.length : 0;
-          setMetrics({
-            totalConversion: Number(totalConv.toFixed(2)),
-            bestConversion: convRates.length > 0 ? Number(convRates[bestIndex]?.toFixed(2)) : 0,
-            worstConversion: convRates.length > 0 ? Number(convRates[worstIndex]?.toFixed(2)) : 0,
-            bestStageLabel:
-              convRates.length > 0 && stageEntries[bestIndex + 1]
-                ? `${stageEntries[bestIndex].stage} → ${stageEntries[bestIndex + 1].stage}`
-                : '-',
-            worstStageLabel:
-              convRates.length > 0 && stageEntries[worstIndex + 1]
-                ? `${stageEntries[worstIndex].stage} → ${stageEntries[worstIndex + 1].stage}`
-                : '-',
-            averageValue: Number(avgValue.toFixed(2)),
-          });
-        }
-      } catch (err) {
-        console.error('Erro inesperado ao carregar funil:', err);
-      }
-    };
-    fetchData();
+    calculateFunnel();
   }, []);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Funil de Conversão</h2>
-          <p className="text-muted-foreground">Análise da jornada do cliente com dados reais</p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Taxa de Conversão Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.totalConversion.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">Leads → {stages[stages.length - 1]?.stage ?? '-'}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              Melhor Etapa
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.bestConversion.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">{metrics.bestStageLabel}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingDown className="h-4 w-4" />
-              Maior Perda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{metrics.worstConversion.toFixed(2)}%</div>
-            <p className="text-xs text-muted-foreground">{metrics.worstStageLabel}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Valor Médio
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">R$ {metrics.averageValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <p className="text-xs text-muted-foreground">Por oportunidade</p>
-          </CardContent>
-        </Card>
-      </div>
-
+  if (loading) {
+    return (
       <Card>
         <CardHeader>
-          <CardTitle>Visualização do Funil</CardTitle>
-          <CardDescription>Fluxo de conversão por etapa</CardDescription>
+          <CardTitle>Funil de Conversão</CardTitle>
+          <CardDescription>Carregando dados...</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {stages.map((stage, index) => (
-              <div key={stage.stage} className="relative">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold">{stage.stage}</h4>
-                  <div className="text-right">
-                    <div className="font-bold">{stage.count.toLocaleString()}</div>
-                    <div className="text-sm text-muted-foreground">{stage.percentage.toFixed(2)}%</div>
-                  </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Funil de Conversão</CardTitle>
+          <CardDescription>Erro ao carregar dados: {error}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Funil de Conversão</CardTitle>
+        <CardDescription>
+          Métricas de conversão baseadas em dados reais
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {funnelData.map((stage, index) => (
+          <div key={stage.stage} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Badge variant={index === funnelData.length - 1 ? "default" : "secondary"}>
+                  {stage.count}
+                </Badge>
+                <span className="font-medium">{stage.stage}</span>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-medium">
+                  {stage.percentage.toFixed(1)}%
                 </div>
-                <div className="relative">
-                  <Progress value={stage.percentage} className="h-8" />
-                  <div
-                    className={`absolute left-0 top-0 h-8 rounded ${stage.color} opacity-70`}
-                    style={{ width: `${stage.percentage}%` }}
-                  />
-                </div>
-                {index < stages.length - 1 && (
-                  <div className="mt-2 text-center text-sm text-muted-foreground">
-                    ↓{' '}
-                    {stage.count > 0
-                      ? ((stages[index + 1].count / stage.count) * 100).toFixed(2)
-                      : '0.00'}
-                    % de conversão
+                {stage.value > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    R$ {stage.value.toLocaleString('pt-BR')}
                   </div>
                 )}
               </div>
-            ))}
-            {stages.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum dado disponível para o funil.</p>
-            )}
+            </div>
+            <Progress value={stage.percentage} className="h-2" />
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        ))}
+        
+        <div className="pt-4 border-t">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium">Taxa de Conversão Total</span>
+            <span className="text-sm text-muted-foreground">
+              {funnelData.length > 0 && funnelData[funnelData.length - 1].percentage.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };

@@ -1,191 +1,238 @@
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Star, TrendingUp, Users, Mail } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-interface LeadData {
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+interface Lead {
+  id: string;
   name: string;
-  company: string | null;
-  email: string | null;
-  phone: string | null;
-  status: string | null;
-  tags: string[] | null;
+  email: string;
+  company: string;
+  score: number;
+  status: string;
+  source: string;
+  created_at: string;
+}
+
+interface ScoreDistribution {
+  range: string;
+  count: number;
+  percentage: number;
+  color: string;
 }
 
 /**
- * Componente de Lead Scoring que utiliza dados reais da tabela `leads` do Supabase.
- * Cada lead recebe uma pontuação calculada a partir do status e do número de
- * tags associadas.  A pontuação é meramente ilustrativa e pode ser
- * ajustada conforme regras de negócio reais.  Os leads são listados e
- * categorizados em quentes, mornos ou frios com base nessa pontuação.
+ * Componente de Lead Scoring que utiliza dados reais da API backend.
+ * 
+ * Este componente calcula automaticamente a distribuição de scores das leads
+ * e apresenta métricas de qualidade baseadas nos dados reais.
  */
-export const LeadScoring = () => {
-  const [leads, setLeads] = useState<LeadData[]>([]);
+export const LeadScoring: React.FC = () => {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [scoreDistribution, setScoreDistribution] = useState<ScoreDistribution[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchLeads = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads`);
+      const leadsData: Lead[] = response.data || [];
+      setLeads(leadsData);
+
+      // Calcular distribuição de scores
+      const distribution = calculateScoreDistribution(leadsData);
+      setScoreDistribution(distribution);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar leads');
+      console.error('Erro ao buscar leads:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateScoreDistribution = (leads: Lead[]): ScoreDistribution[] => {
+    const total = leads.length;
+    if (total === 0) return [];
+
+    const ranges = [
+      { min: 0, max: 20, label: '0-20', color: 'bg-red-500' },
+      { min: 21, max: 40, label: '21-40', color: 'bg-orange-500' },
+      { min: 41, max: 60, label: '41-60', color: 'bg-yellow-500' },
+      { min: 61, max: 80, label: '61-80', color: 'bg-blue-500' },
+      { min: 81, max: 100, label: '81-100', color: 'bg-green-500' }
+    ];
+
+    return ranges.map(range => {
+      const count = leads.filter(lead => 
+        lead.score >= range.min && lead.score <= range.max
+      ).length;
+      
+      return {
+        range: range.label,
+        count,
+        percentage: total > 0 ? (count / total) * 100 : 0,
+        color: range.color
+      };
+    });
+  };
+
+  const getAverageScore = () => {
+    if (leads.length === 0) return 0;
+    const total = leads.reduce((sum, lead) => sum + lead.score, 0);
+    return total / leads.length;
+  };
+
+  const getHighQualityLeads = () => {
+    return leads.filter(lead => lead.score >= 70).length;
+  };
+
+  const getLowQualityLeads = () => {
+    return leads.filter(lead => lead.score <= 30).length;
+  };
 
   useEffect(() => {
-    const fetchLeads = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('leads')
-          .select('name, company, email, phone, status, tags');
-        if (error) {
-          console.error('Erro ao buscar leads:', error.message);
-          return;
-        }
-        setLeads((data || []) as LeadData[]);
-      } catch (err) {
-        console.error('Erro inesperado ao carregar leads:', err);
-      }
-    };
     fetchLeads();
   }, []);
 
-  // Função para calcular uma pontuação simples para cada lead.  A pontuação
-  // parte de 50 e aumenta conforme o status e o número de tags.  Leads com
-  // status "hot" recebem +40 pontos, "warm" +20 e outros nenhum ajuste.
-  const computeScore = (lead: LeadData): number => {
-    let score = 50;
-    if (lead.status) {
-      const normalized = lead.status.toLowerCase();
-      if (normalized.includes('hot')) score += 40;
-      else if (normalized.includes('warm')) score += 20;
-      else if (normalized.includes('cold') || normalized.includes('new')) score += 0;
-    }
-    const tagBonus = (lead.tags?.length || 0) * 2;
-    score += tagBonus;
-    return Math.min(score, 100);
-  };
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Lead Scoring</CardTitle>
+          <CardDescription>Carregando dados...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
-  const sortedLeads = [...leads]
-    .map((lead) => ({ ...lead, score: computeScore(lead) }))
-    .sort((a, b) => b.score - a.score);
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Lead Scoring</CardTitle>
+          <CardDescription>Erro ao carregar dados: {error}</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
-  const hotCount = sortedLeads.filter((l) => l.score >= 80).length;
-  const warmCount = sortedLeads.filter((l) => l.score >= 60 && l.score < 80).length;
-  const coldCount = sortedLeads.filter((l) => l.score < 60).length;
-  const averageScore = sortedLeads.length
-    ? sortedLeads.reduce((acc, l) => acc + l.score, 0) / sortedLeads.length
-    : 0;
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getStatusBadge = (score: number): 'default' | 'secondary' | 'outline' | 'destructive' => {
-    if (score >= 80) return 'destructive';
-    if (score >= 60) return 'secondary';
-    return 'outline';
-  };
+  const averageScore = getAverageScore();
+  const highQualityCount = getHighQualityLeads();
+  const lowQualityCount = getLowQualityLeads();
+  const totalLeads = leads.length;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">Lead Scoring</h2>
-          <p className="text-muted-foreground">Pontuação automática baseada em dados reais</p>
-        </div>
-        <Button variant="outline">
-          <TrendingUp className="h-4 w-4 mr-2" />
-          Configurar Critérios
-        </Button>
-      </div>
-
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Star className="h-4 w-4" />
-              Leads Quentes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{hotCount}</div>
-            <p className="text-xs text-muted-foreground">Score &gt;= 80</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Leads Mornos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{warmCount}</div>
-            <p className="text-xs text-muted-foreground">Score 60–79</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Mail className="h-4 w-4" />
-              Leads Frios
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{coldCount}</div>
-            <p className="text-xs text-muted-foreground">Score &lt; 60</p>
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Score Médio</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{averageScore.toFixed(1)}</div>
-            <p className="text-xs text-muted-foreground">Média geral dos leads</p>
+            <p className="text-xs text-muted-foreground">Pontuação média das leads</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Leads de Alta Qualidade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{highQualityCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Score ≥ 70 ({totalLeads > 0 ? ((highQualityCount / totalLeads) * 100).toFixed(1) : 0}%)
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Leads de Baixa Qualidade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{lowQualityCount}</div>
+            <p className="text-xs text-muted-foreground">
+              Score ≤ 30 ({totalLeads > 0 ? ((lowQualityCount / totalLeads) * 100).toFixed(1) : 0}%)
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total de Leads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalLeads}</div>
+            <p className="text-xs text-muted-foreground">Leads analisadas</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Leads por Pontuação</CardTitle>
-          <CardDescription>Lista ordenada por score de qualificação</CardDescription>
+          <CardTitle>Distribuição de Scores</CardTitle>
+          <CardDescription>Distribuição das leads por faixa de pontuação</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {sortedLeads.map((lead) => (
-              <div
-                key={`${lead.email ?? lead.name}-${lead.company ?? ''}`}
-                className="flex items-center justify-between p-4 border rounded-lg"
-              >
-                <div className="flex items-center gap-4">
-                  <div>
-                    <h4 className="font-semibold">{lead.name}</h4>
-                    {lead.company && (
-                      <p className="text-sm text-muted-foreground">{lead.company}</p>
-                    )}
-                    {lead.email && (
-                      <p className="text-xs text-muted-foreground">{lead.email}</p>
-                    )}
-                  </div>
+        <CardContent className="space-y-4">
+          {scoreDistribution.map((item) => (
+            <div key={item.range} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline">{item.count}</Badge>
+                  <span className="font-medium">Score {item.range}</span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <div className={`text-2xl font-bold ${getScoreColor(lead.score)}`}>
-                      {lead.score}
-                    </div>
-                    <Progress value={lead.score} className="w-20 h-2" />
-                  </div>
-                  <Badge variant={getStatusBadge(lead.score)}>
-                    {lead.score >= 80 ? 'hot' : lead.score >= 60 ? 'warm' : 'cold'}
-                  </Badge>
-                  <Button size="sm">Contatar</Button>
+                <div className="text-sm text-muted-foreground">
+                  {item.percentage.toFixed(1)}%
                 </div>
               </div>
-            ))}
-            {sortedLeads.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhum lead encontrado.</p>
+              <Progress value={item.percentage} className="h-2" />
+            </div>
+          ))}
+          
+          {scoreDistribution.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhum dado disponível para análise.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Leads</CardTitle>
+          <CardDescription>Leads com maior pontuação</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {leads
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 5)
+              .map((lead) => (
+                <div key={lead.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <div className="font-medium">{lead.name}</div>
+                    <div className="text-sm text-muted-foreground">{lead.company}</div>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={lead.score >= 70 ? "default" : lead.score >= 40 ? "secondary" : "destructive"}>
+                      Score: {lead.score}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            
+            {leads.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Nenhuma lead encontrada.
+              </p>
             )}
           </div>
         </CardContent>

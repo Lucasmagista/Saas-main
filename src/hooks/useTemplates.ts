@@ -1,149 +1,252 @@
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-export interface MessageTemplate {
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+export interface Template {
   id: string;
-  organization_id: string;
   name: string;
-  category: string;
-  channel: string;
-  language: string;
-  subject: string;
+  description?: string;
   content: string;
-  variables: any[];
-  media_urls: string[];
+  type: 'text' | 'media' | 'template';
+  variables: string[];
   is_active: boolean;
-  usage_count: number;
-  created_by: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
+  metadata?: any;
 }
 
-export const useTemplates = (channel?: string) => {
-  const { toast } = useToast();
+export interface CreateTemplateData {
+  name: string;
+  description?: string;
+  content: string;
+  type?: 'text' | 'media' | 'template';
+  variables?: string[];
+  is_active?: boolean;
+  metadata?: any;
+}
 
-  return useQuery({
-    queryKey: ['templates', channel],
-    queryFn: async () => {
-      let query = supabase
-        .from('message_templates_v2')
-        .select('*')
-        .eq('is_active', true)
-        .order('usage_count', { ascending: false });
+export interface UpdateTemplateData {
+  name?: string;
+  description?: string;
+  content?: string;
+  type?: 'text' | 'media' | 'template';
+  variables?: string[];
+  is_active?: boolean;
+  metadata?: any;
+}
 
-      if (channel) {
-        query = query.eq('channel', channel);
-      }
+export interface TemplateFilters {
+  type?: string;
+  is_active?: boolean;
+  search?: string;
+  created_by?: string;
+}
 
-      const { data, error } = await query;
+export const useTemplates = () => {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TemplateFilters>({});
 
-      if (error) {
-        toast({
-          title: 'Erro ao carregar templates',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
-      }
-
-      return data as MessageTemplate[];
-    },
-  });
-};
-
-export const useCreateTemplate = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (template: Omit<MessageTemplate, 'id' | 'created_at' | 'updated_at' | 'usage_count'>) => {
-      const { data, error } = await supabase
-        .from('message_templates_v2')
-        .insert(template)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast({
-        title: 'Template criado',
-        description: 'Template criado com sucesso.',
+  const fetchTemplates = async (customFilters?: TemplateFilters) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = new URLSearchParams();
+      const filtersToUse = customFilters || filters;
+      
+      Object.entries(filtersToUse).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          queryParams.append(key, value.toString());
+        }
       });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao criar template',
-        description: error.message,
-        variant: 'destructive',
+
+      const url = `${API_BASE}/api/templates${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await makeAuthenticatedRequest(url);
+      setTemplates(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar templates');
+      console.error('Erro ao buscar templates:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createTemplate = async (templateData: CreateTemplateData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates`, {
+        method: 'POST',
+        data: templateData,
       });
-    },
-  });
-};
+      setTemplates(prev => [response.data, ...prev]);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar template';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-export const useUpdateTemplate = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<MessageTemplate> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('message_templates_v2')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast({
-        title: 'Template atualizado',
-        description: 'Template atualizado com sucesso.',
+  const updateTemplate = async (id: string, templateData: UpdateTemplateData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/${id}`, {
+        method: 'PUT',
+        data: templateData,
       });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao atualizar template',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-};
+      setTemplates(prev => prev.map(template => template.id === id ? response.data : template));
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar template';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
 
-export const useDeleteTemplate = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('message_templates_v2')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast({
-        title: 'Template excluído',
-        description: 'Template excluído com sucesso.',
+  const deleteTemplate = async (id: string) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/templates/${id}`, {
+        method: 'DELETE',
       });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao excluir template',
-        description: error.message,
-        variant: 'destructive',
+      setTemplates(prev => prev.filter(template => template.id !== id));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar template';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const duplicateTemplate = async (id: string) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/${id}/duplicate`, {
+        method: 'POST',
       });
-    },
-  });
+      setTemplates(prev => [response.data, ...prev]);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao duplicar template';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const renderTemplate = async (id: string, variables: Record<string, any>) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/${id}/render`, {
+        method: 'POST',
+        data: { variables },
+      });
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao renderizar template';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const bulkUpdateTemplates = async (ids: string[], updates: UpdateTemplateData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/bulk-update`, {
+        method: 'PUT',
+        data: { ids, updates },
+      });
+      
+      // Atualizar templates localmente
+      setTemplates(prev => prev.map(template => 
+        ids.includes(template.id) ? { ...template, ...updates } : template
+      ));
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar templates em lote';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const bulkDeleteTemplates = async (ids: string[]) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/templates/bulk-delete`, {
+        method: 'DELETE',
+        data: { ids },
+      });
+      setTemplates(prev => prev.filter(template => !ids.includes(template.id)));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar templates em lote';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const exportTemplates = async (format: 'json' | 'csv' = 'json') => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/export?format=${format}`, {
+        method: 'GET',
+        responseType: 'blob',
+      });
+      
+      // Criar download do arquivo
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `templates.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao exportar templates';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const importTemplates = async (templatesData: CreateTemplateData[]) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/import`, {
+        method: 'POST',
+        data: { templates: templatesData },
+      });
+      
+      // Adicionar novos templates à lista
+      setTemplates(prev => [...response.data, ...prev]);
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao importar templates';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const updateFilters = (newFilters: TemplateFilters) => {
+    setFilters(newFilters);
+  };
+
+  useEffect(() => {
+    fetchTemplates();
+  }, [filters]);
+
+  return {
+    templates,
+    loading,
+    error,
+    filters,
+    fetchTemplates,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
+    duplicateTemplate,
+    renderTemplate,
+    bulkUpdateTemplates,
+    bulkDeleteTemplates,
+    exportTemplates,
+    importTemplates,
+    updateFilters,
+  };
 };

@@ -1,6 +1,6 @@
 /*
  * Serviço responsável por operações com a tabela de multi‑sessões. Ele delega
- * persistência ao Supabase e integra com o botManager para iniciar ou
+ * persistência ao banco local e integra com o botManager para iniciar ou
  * encerrar sessões WPPConnect conforme necessário. A separação em serviço
  * permite que as rotas (controllers) fiquem mais enxutas e facilite testes.
  */

@@ -1,167 +1,72 @@
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown, Users, DollarSign, Target, Activity } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
+import React from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useQuery } from '@tanstack/react-query';
+import { makeAuthenticatedRequest } from '../../utils/api';
+import { 
+  Users, 
+  MessageSquare, 
+  Bot, 
+  TrendingUp, 
+  Activity, 
+  Zap,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  BarChart3
+} from 'lucide-react';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 interface DashboardMetrics {
-  totalLeads: number;
-  newLeads: number;
-  totalOpportunities: number;
-  totalRevenue: number;
-  conversionRate: number;
-  recentActivities: number;
+  users: {
+    total: number;
+    active: number;
+    new: number;
+  };
+  messages: {
+    total: number;
+    sent: number;
+    failed: number;
+    delivered: number;
+  };
+  bots: {
+    total: number;
+    active: number;
+    inactive: number;
+  };
+  performance: {
+    response_time: number;
+    uptime: number;
+    error_rate: number;
+  };
+  webhooks: {
+    total: number;
+    active: number;
+    deliveries: number;
+    success_rate: number;
+  };
 }
 
-export const DashboardMetrics = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics>({
-    totalLeads: 0,
-    newLeads: 0,
-    totalOpportunities: 0,
-    totalRevenue: 0,
-    conversionRate: 0,
-    recentActivities: 0,
+export const DashboardMetrics: React.FC = () => {
+  const { data: metrics, isLoading, error } = useQuery({
+    queryKey: ['dashboard-metrics'],
+    queryFn: async (): Promise<DashboardMetrics> => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/analytics/dashboard`);
+      return response.data;
+    },
+    refetchInterval: 30000 // Atualizar a cada 30 segundos
   });
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
 
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchMetrics = async () => {
-      try {
-        // Buscar leads
-        const { data: leadsData } = await supabase
-          .from('leads')
-          .select('*');
-
-        // Buscar oportunidades
-        const { data: opportunitiesData } = await supabase
-          .from('opportunities')
-          .select('*');
-
-        // Buscar atividades recentes
-        const { data: activitiesData } = await supabase
-          .from('activities')
-          .select('*')
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-        const totalLeads = leadsData?.length || 0;
-        const newLeads = leadsData?.filter(lead => 
-          new Date(lead.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ).length || 0;
-
-        const totalOpportunities = opportunitiesData?.length || 0;
-        const totalRevenue = opportunitiesData?.reduce((sum, opp) => 
-          sum + (parseFloat(opp.value?.toString() || '0') || 0), 0
-        ) || 0;
-
-        const conversionRate = totalLeads > 0 ? (totalOpportunities / totalLeads) * 100 : 0;
-        const recentActivities = activitiesData?.length || 0;
-
-        setMetrics({
-          totalLeads,
-          newLeads,
-          totalOpportunities,
-          totalRevenue,
-          conversionRate,
-          recentActivities,
-        });
-      } catch (error) {
-        console.error('Error fetching metrics:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMetrics();
-
-    // Configurar real-time para atualizações
-    const channel = supabase
-      .channel('dashboard-metrics')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, fetchMetrics)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, fetchMetrics)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, fetchMetrics)
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
-
-  const metricCards = [
-    {
-      title: 'Total de Leads',
-      value: metrics.totalLeads,
-      icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-      borderColor: 'border-blue-200',
-      trend: metrics.newLeads > 0 ? 'up' : 'neutral',
-      trendValue: `+${metrics.newLeads} novos`,
-      change: '+12.5%',
-      description: 'vs mês anterior',
-    },
-    {
-      title: 'Oportunidades',
-      value: metrics.totalOpportunities,
-      icon: Target,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-      borderColor: 'border-green-200',
-      trend: 'up',
-      trendValue: 'Ativo',
-      change: '+8.3%',
-      description: 'em progresso',
-    },
-    {
-      title: 'Receita Total',
-      value: `R$ ${(metrics.totalRevenue / 1000).toFixed(0)}K`,
-      icon: DollarSign,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-      borderColor: 'border-purple-200',
-      trend: metrics.totalRevenue > 0 ? 'up' : 'neutral',
-      trendValue: `${metrics.totalOpportunities} oportunidades`,
-      change: '+23.7%',
-      description: 'receita mensal',
-    },
-    {
-      title: 'Taxa de Conversão',
-      value: `${metrics.conversionRate.toFixed(1)}%`,
-      icon: TrendingUp,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
-      borderColor: 'border-orange-200',
-      trend: metrics.conversionRate > 20 ? 'up' : 'down',
-      trendValue: 'Últimos 30 dias',
-      change: metrics.conversionRate > 20 ? '+2.1%' : '-1.4%',
-      description: 'lead para cliente',
-    },
-    {
-      title: 'Atividades',
-      value: metrics.recentActivities,
-      icon: Activity,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
-      borderColor: 'border-red-200',
-      trend: 'up',
-      trendValue: 'Últimas 24h',
-      change: '+15.2%',
-      description: 'engajamento',
-    },
-  ];
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        {[...Array(5)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardContent className="p-6">
-              <div className="h-4 bg-gray-200 rounded mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded"></div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {[...Array(8)].map((_, i) => (
+          <Card key={i}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Carregando...</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">--</div>
             </CardContent>
           </Card>
         ))}
@@ -169,54 +74,142 @@ export const DashboardMetrics = () => {
     );
   }
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-      {metricCards.map((metric, index) => (
-        <Card key={index} className={`hover:shadow-lg transition-all duration-200 border-l-4 ${metric.borderColor} hover:scale-105`}>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className={`p-2 rounded-lg ${metric.bgColor}`}>
-                    <metric.icon className={`h-5 w-5 ${metric.color}`} />
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {metric.title}
-                  </span>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="text-2xl font-bold">{metric.value}</div>
-                  
-                  <div className="flex items-center gap-2">
-                    {metric.trend === 'up' && (
-                      <div className="flex items-center gap-1 text-green-600">
-                        <TrendingUp className="h-3 w-3" />
-                        <span className="text-sm font-medium">{metric.change}</span>
-                      </div>
-                    )}
-                    {metric.trend === 'down' && (
-                      <div className="flex items-center gap-1 text-red-600">
-                        <TrendingDown className="h-3 w-3" />
-                        <span className="text-sm font-medium">{metric.change}</span>
-                      </div>
-                    )}
-                    {metric.trend === 'neutral' && (
-                      <div className="flex items-center gap-1 text-gray-600">
-                        <span className="text-sm font-medium">Estável</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="text-xs text-muted-foreground">
-                    {metric.description}
-                  </div>
-                </div>
-              </div>
-            </div>
+  if (error) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Erro</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">Erro</div>
+            <p className="text-xs text-muted-foreground">
+              Erro ao carregar métricas
+            </p>
           </CardContent>
         </Card>
-      ))}
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Usuários */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Usuários</CardTitle>
+          <Users className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.users.total}</div>
+          <p className="text-xs text-muted-foreground">
+            +{metrics.users.new} novos este mês
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Mensagens */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Mensagens</CardTitle>
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.messages.total}</div>
+          <p className="text-xs text-muted-foreground">
+            {metrics.messages.sent} enviadas hoje
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Bots */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Bots</CardTitle>
+          <Bot className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.bots.total}</div>
+          <p className="text-xs text-muted-foreground">
+            {metrics.bots.active} ativos
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Performance */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Performance</CardTitle>
+          <Activity className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.performance.response_time}ms</div>
+          <p className="text-xs text-muted-foreground">
+            {metrics.performance.uptime}% uptime
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Taxa de Entrega */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Taxa de Entrega</CardTitle>
+          <CheckCircle className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.messages.delivered}</div>
+          <p className="text-xs text-muted-foreground">
+            {((metrics.messages.delivered / metrics.messages.sent) * 100).toFixed(1)}% sucesso
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Webhooks */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Webhooks</CardTitle>
+          <Zap className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.webhooks.total}</div>
+          <p className="text-xs text-muted-foreground">
+            {metrics.webhooks.active} ativos
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Tempo de Resposta */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Tempo de Resposta</CardTitle>
+          <Clock className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.performance.response_time}ms</div>
+          <p className="text-xs text-muted-foreground">
+            Média dos últimos 24h
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Taxa de Erro */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Taxa de Erro</CardTitle>
+          <AlertCircle className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{metrics.performance.error_rate}%</div>
+          <p className="text-xs text-muted-foreground">
+            {metrics.messages.failed} falhas hoje
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };

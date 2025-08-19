@@ -1,193 +1,284 @@
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect, useCallback } from 'react';
+import { makeAuthenticatedRequest } from '@/utils/api';
 
-interface Lead {
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
+
+export interface Lead {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
-  company: string | null;
-  source: string | null;
-  status: string;
+  email: string;
+  phone: string;
+  company?: string;
+  position?: string;
+  source: string;
+  status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
+  score: number;
+  assigned_to?: string;
+  notes?: string;
   tags: string[];
-  custom_fields: any;
-  assigned_to: string | null;
-  created_by: string | null;
+  metadata?: any;
   created_at: string;
   updated_at: string;
+  last_contact_at?: string;
+}
+
+export interface CreateLeadData {
+  name: string;
+  email: string;
+  phone: string;
+  company?: string;
+  position?: string;
+  source: string;
+  status?: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
+  score?: number;
+  assigned_to?: string;
+  notes?: string;
+  tags?: string[];
+  metadata?: any;
+}
+
+export interface UpdateLeadData {
+  name?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  position?: string;
+  source?: string;
+  status?: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
+  score?: number;
+  assigned_to?: string;
+  notes?: string;
+  tags?: string[];
+  metadata?: any;
+}
+
+export interface LeadFilters {
+  status?: string;
+  source?: string;
+  assigned_to?: string;
+  tags?: string[];
+  search?: string;
+  date_from?: string;
+  date_to?: string;
 }
 
 export const useLeads = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
-  const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<LeadFilters>({});
 
-  useEffect(() => {
-    if (!user) return;
+  // Polling para simular tempo real (em produção, usar WebSocket)
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
-    const fetchLeads = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('leads')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('Error fetching leads:', error);
-          return;
-        }
-
-        setLeads(data || []);
-      } catch (error) {
-        console.error('Error fetching leads:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLeads();
-
-    // Real-time subscription
-    const channel = supabase
-      .channel('leads')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'leads'
-        },
-        (payload) => {
-          setLeads(prev => [payload.new as Lead, ...prev]);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'leads'
-        },
-        (payload) => {
-          setLeads(prev =>
-            prev.map(lead => lead.id === payload.new.id ? payload.new as Lead : lead)
-          );
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'leads'
-        },
-        (payload) => {
-          setLeads(prev => prev.filter(lead => lead.id !== payload.old.id));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
-
-  const createLead = async (leadData: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
+  const fetchLeads = useCallback(async (customFilters?: LeadFilters) => {
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .insert([leadData])
-        .select()
-        .single();
-
-      if (error) {
-        toast({
-          title: 'Erro ao criar lead',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { error };
-      }
-
-      toast({
-        title: 'Sucesso!',
-        description: 'Lead criado com sucesso',
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = new URLSearchParams();
+      const filtersToUse = customFilters || filters;
+      
+      Object.entries(filtersToUse).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, v));
+          } else {
+            queryParams.append(key, value.toString());
+          }
+        }
       });
 
-      return { data, error: null };
-    } catch (error) {
-      console.error('Error creating lead:', error);
-      return { error };
+      const url = `${API_BASE}/api/leads${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const response = await makeAuthenticatedRequest(url);
+      setLeads(response.data);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Erro ao carregar leads');
+      console.error('Erro ao buscar leads:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  const createLead = async (leadData: CreateLeadData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads`, {
+        method: 'POST',
+        data: leadData,
+      });
+      setLeads(prev => [response.data, ...prev]);
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao criar lead';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
   };
 
-  const updateLead = async (id: string, updates: Partial<Lead>) => {
+  const updateLead = async (id: string, leadData: UpdateLeadData) => {
     try {
-      const { data, error } = await supabase
-        .from('leads')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        toast({
-          title: 'Erro ao atualizar lead',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { error };
-      }
-
-      toast({
-        title: 'Sucesso!',
-        description: 'Lead atualizado com sucesso',
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads/${id}`, {
+        method: 'PUT',
+        data: leadData,
       });
-
-      return { data, error: null };
-    } catch (error) {
-      console.error('Error updating lead:', error);
-      return { error };
+      setLeads(prev => prev.map(lead => lead.id === id ? response.data : lead));
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar lead';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
   };
 
   const deleteLead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('leads')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        toast({
-          title: 'Erro ao deletar lead',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return { error };
-      }
-
-      toast({
-        title: 'Sucesso!',
-        description: 'Lead deletado com sucesso',
+      await makeAuthenticatedRequest(`${API_BASE}/api/leads/${id}`, {
+        method: 'DELETE',
       });
-
-      return { error: null };
-    } catch (error) {
-      console.error('Error deleting lead:', error);
-      return { error };
+      setLeads(prev => prev.filter(lead => lead.id !== id));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar lead';
+      setError(errorMsg);
+      throw new Error(errorMsg);
     }
   };
+
+  const bulkUpdateLeads = async (ids: string[], updates: UpdateLeadData) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads/bulk-update`, {
+        method: 'PUT',
+        data: { ids, updates },
+      });
+      
+      // Atualizar leads localmente
+      setLeads(prev => prev.map(lead => 
+        ids.includes(lead.id) ? { ...lead, ...updates } : lead
+      ));
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao atualizar leads em lote';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const bulkDeleteLeads = async (ids: string[]) => {
+    try {
+      await makeAuthenticatedRequest(`${API_BASE}/api/leads/bulk-delete`, {
+        method: 'DELETE',
+        data: { ids },
+      });
+      setLeads(prev => prev.filter(lead => !ids.includes(lead.id)));
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao deletar leads em lote';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const importLeads = async (leadsData: CreateLeadData[]) => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads/import`, {
+        method: 'POST',
+        data: { leads: leadsData },
+      });
+      
+      // Adicionar novos leads à lista
+      setLeads(prev => [...response.data, ...prev]);
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao importar leads';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const exportLeads = async (format: 'csv' | 'xlsx' = 'csv') => {
+    try {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/leads/export?format=${format}`, {
+        method: 'GET',
+        responseType: 'blob',
+      });
+      
+      // Criar download do arquivo
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `leads.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return response.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'Erro ao exportar leads';
+      setError(errorMsg);
+      throw new Error(errorMsg);
+    }
+  };
+
+  const updateFilters = useCallback((newFilters: LeadFilters) => {
+    setFilters(newFilters);
+  }, []);
+
+  // Iniciar polling para simular tempo real
+  const startPolling = useCallback(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+    
+    const interval = setInterval(() => {
+      fetchLeads();
+    }, 30000); // Poll a cada 30 segundos
+    
+    setPollingInterval(interval);
+  }, [fetchLeads, pollingInterval]);
+
+  // Parar polling
+  const stopPolling = useCallback(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+  }, [pollingInterval]);
+
+  useEffect(() => {
+    fetchLeads();
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+  }, [fetchLeads, startPolling, stopPolling]);
+
+  // Cleanup no unmount
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   return {
     leads,
     loading,
+    error,
+    filters,
+    fetchLeads,
     createLead,
     updateLead,
     deleteLead,
+    bulkUpdateLeads,
+    bulkDeleteLeads,
+    importLeads,
+    exportLeads,
+    updateFilters,
+    startPolling,
+    stopPolling,
   };
 };

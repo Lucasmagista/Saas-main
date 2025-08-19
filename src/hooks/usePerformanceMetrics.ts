@@ -1,240 +1,280 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { makeAuthenticatedRequest } from '../utils/api';
+import { toast } from 'react-hot-toast';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
 
 export interface PerformanceMetric {
   id: string;
-  organization_id: string;
+  name: string;
+  description: string;
+  type: 'counter' | 'gauge' | 'histogram' | 'summary';
+  value: number;
+  unit: string;
+  tags: Record<string, string>;
+  timestamp: string;
+}
+
+export interface MetricAlert {
+  id: string;
   metric_name: string;
-  metric_value: number;
-  metric_type: string;
-  metadata: any;
-  recorded_at: string;
-}
-
-export interface CacheEntry {
-  id: string;
-  organization_id: string;
-  cache_key: string;
-  cache_value: any;
-  expires_at: string;
+  condition: 'gt' | 'lt' | 'eq' | 'gte' | 'lte';
+  threshold: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  is_active: boolean;
   created_at: string;
 }
 
-export interface AuditLog {
+export interface MetricDashboard {
   id: string;
-  organization_id: string;
-  user_id: string;
-  action: string;
-  resource_type: string;
-  resource_id: string;
-  old_values: any;
-  new_values: any;
-  ip_address: string;
-  user_agent: string;
-  metadata: any;
+  name: string;
+  description: string;
+  layout: any;
+  metrics: string[];
+  created_by: string;
   created_at: string;
 }
 
-export const usePerformanceMetrics = (metricName?: string, timeRange?: string) => {
-  const { toast } = useToast();
-
+// Hooks para Métricas
+export const usePerformanceMetrics = (filters?: any) => {
   return useQuery({
-    queryKey: ['performance-metrics', metricName, timeRange],
+    queryKey: ['performance-metrics', filters],
     queryFn: async () => {
-      let query = supabase
-        .from('performance_metrics')
-        .select('*')
-        .order('recorded_at', { ascending: false });
-
-      if (metricName) {
-        query = query.eq('metric_name', metricName);
-      }
-
-      if (timeRange) {
-        const date = new Date();
-        switch (timeRange) {
-          case '24h':
-            date.setHours(date.getHours() - 24);
-            break;
-          case '7d':
-            date.setDate(date.getDate() - 7);
-            break;
-          case '30d':
-            date.setDate(date.getDate() - 30);
-            break;
-        }
-        query = query.gte('recorded_at', date.toISOString());
-      }
-
-      const { data, error } = await query.limit(1000);
-
-      if (error) {
-        toast({
-          title: 'Erro ao carregar métricas',
-          description: error.message,
-          variant: 'destructive',
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.append(key, String(value));
         });
-        throw error;
       }
-
-      return data as PerformanceMetric[];
-    },
-  });
-};
-
-export const useRecordMetric = () => {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-
-  return useMutation({
-    mutationFn: async (metric: Omit<PerformanceMetric, 'id' | 'recorded_at'>) => {
-      const { data, error } = await supabase
-        .from('performance_metrics')
-        .insert(metric)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['performance-metrics'] });
-    },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao registrar métrica',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
-};
-
-export const useAuditLogs = (resourceType?: string, userId?: string) => {
-  const { toast } = useToast();
-
-  return useQuery({
-    queryKey: ['audit-logs', resourceType, userId],
-    queryFn: async () => {
-      let query = supabase
-        .from('audit_logs_v2')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (resourceType) {
-        query = query.eq('resource_type', resourceType);
-      }
-
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      const { data, error } = await query.limit(500);
-
-      if (error) {
-        toast({
-          title: 'Erro ao carregar logs',
-          description: error.message,
-          variant: 'destructive',
-        });
-        throw error;
-      }
-
-      return data as AuditLog[];
-    },
-  });
-};
-
-export const useCreateAuditLog = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (log: Omit<AuditLog, 'id' | 'created_at'>) => {
-      const { data, error } = await supabase
-        .from('audit_logs_v2')
-        .insert(log)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
-    },
-  });
-};
-
-export const useCacheEntry = (key: string) => {
-  return useQuery({
-    queryKey: ['cache-entry', key],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cache_entries')
-        .select('*')
-        .eq('cache_key', key)
-        .gt('expires_at', new Date().toISOString())
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-
-      return data as CacheEntry | null;
-    },
-  });
-};
-
-export const useSetCacheEntry = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ key, value, ttl }: { key: string; value: any; ttl: number }) => {
-      const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
       
-      const { data, error } = await supabase
-        .from('cache_entries')
-        .upsert({
-          cache_key: key,
-          cache_value: value,
-          expires_at: expiresAt,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['cache-entry', data.cache_key], data);
-    },
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/performance?${params}`);
+      return response.data;
+    }
   });
 };
 
-export const useCleanupCache = () => {
-  const { toast } = useToast();
+export const useSystemMetrics = (timeRange = '1h') => {
+  return useQuery({
+    queryKey: ['system-metrics', timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/system?timeRange=${timeRange}`);
+      return response.data;
+    },
+    refetchInterval: 30000 // Atualizar a cada 30 segundos
+  });
+};
 
+export const useApplicationMetrics = (timeRange = '1h') => {
+  return useQuery({
+    queryKey: ['application-metrics', timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/application?timeRange=${timeRange}`);
+      return response.data;
+    },
+    refetchInterval: 60000 // Atualizar a cada minuto
+  });
+};
+
+export const useDatabaseMetrics = (timeRange = '1h') => {
+  return useQuery({
+    queryKey: ['database-metrics', timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/database?timeRange=${timeRange}`);
+      return response.data;
+    },
+    refetchInterval: 30000
+  });
+};
+
+export const useCustomMetrics = (metricName?: string) => {
+  return useQuery({
+    queryKey: ['custom-metrics', metricName],
+    queryFn: async () => {
+      const params = metricName ? `?name=${metricName}` : '';
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/custom${params}`);
+      return response.data;
+    }
+  });
+};
+
+export const useCreateCustomMetric = () => {
+  const queryClient = useQueryClient();
+  
   return useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .rpc('cleanup_expired_cache');
-
-      if (error) throw error;
+    mutationFn: async (metricData: Partial<PerformanceMetric>) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/custom`, {
+        method: 'POST',
+        data: metricData
+      });
+      return response.data;
     },
     onSuccess: () => {
-      toast({
-        title: 'Cache limpo',
-        description: 'Entradas expiradas removidas com sucesso.',
+      queryClient.invalidateQueries({ queryKey: ['custom-metrics'] });
+      toast.success('Métrica criada com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao criar métrica');
+    }
+  });
+};
+
+// Hooks para Alertas
+export const useMetricAlerts = () => {
+  return useQuery({
+    queryKey: ['metric-alerts'],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/alerts`);
+      return response.data;
+    }
+  });
+};
+
+export const useCreateMetricAlert = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (alertData: Partial<MetricAlert>) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/alerts`, {
+        method: 'POST',
+        data: alertData
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metric-alerts'] });
+      toast.success('Alerta criado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao criar alerta');
+    }
+  });
+};
+
+export const useUpdateMetricAlert = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...alertData }: Partial<MetricAlert> & { id: string }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/alerts/${id}`, {
+        method: 'PUT',
+        data: alertData
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metric-alerts'] });
+      toast.success('Alerta atualizado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao atualizar alerta');
+    }
+  });
+};
+
+export const useDeleteMetricAlert = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await makeAuthenticatedRequest(`${API_BASE}/api/metrics/alerts/${id}`, {
+        method: 'DELETE'
       });
     },
-    onError: (error) => {
-      toast({
-        title: 'Erro ao limpar cache',
-        description: error.message,
-        variant: 'destructive',
-      });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metric-alerts'] });
+      toast.success('Alerta removido com sucesso!');
     },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao remover alerta');
+    }
+  });
+};
+
+// Hooks para Dashboards
+export const useMetricDashboards = () => {
+  return useQuery({
+    queryKey: ['metric-dashboards'],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/dashboards`);
+      return response.data;
+    }
+  });
+};
+
+export const useCreateMetricDashboard = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (dashboardData: Partial<MetricDashboard>) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/dashboards`, {
+        method: 'POST',
+        data: dashboardData
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metric-dashboards'] });
+      toast.success('Dashboard criado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao criar dashboard');
+    }
+  });
+};
+
+export const useUpdateMetricDashboard = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...dashboardData }: Partial<MetricDashboard> & { id: string }) => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/dashboards/${id}`, {
+        method: 'PUT',
+        data: dashboardData
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['metric-dashboards'] });
+      toast.success('Dashboard atualizado com sucesso!');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao atualizar dashboard');
+    }
+  });
+};
+
+// Hooks para Analytics
+export const usePerformanceAnalytics = (timeRange = '24h') => {
+  return useQuery({
+    queryKey: ['performance-analytics', timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/analytics?timeRange=${timeRange}`);
+      return response.data;
+    }
+  });
+};
+
+export const useMetricTrends = (metricName: string, timeRange = '7d') => {
+  return useQuery({
+    queryKey: ['metric-trends', metricName, timeRange],
+    queryFn: async () => {
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/trends?metric=${metricName}&timeRange=${timeRange}`);
+      return response.data;
+    }
+  });
+};
+
+export const useMetricComparison = (metricName: string, timeRanges: string[]) => {
+  return useQuery({
+    queryKey: ['metric-comparison', metricName, timeRanges],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append('metric', metricName);
+      timeRanges.forEach(range => params.append('timeRanges', range));
+      
+      const response = await makeAuthenticatedRequest(`${API_BASE}/api/metrics/comparison?${params}`);
+      return response.data;
+    }
   });
 };

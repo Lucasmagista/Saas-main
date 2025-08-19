@@ -7,7 +7,7 @@ WORKDIR /app
 # Copia somente os arquivos necessários para o backend
 COPY package*.json ./
 COPY backend ./backend
-COPY supabase ./supabase
+# COPY supabase ./supabase  # Removido - não existe mais pasta supabase
 COPY .env.example ./
 
 # Instala dependências de produção (caso deseje incluir dev use `npm install`)

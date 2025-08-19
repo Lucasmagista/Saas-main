@@ -1,183 +1,249 @@
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const config = require('../config.cjs');
+const logger = require('../logger.cjs');
 
-class JwtService {
+class JWTService {
   constructor() {
-    this.jwtSecret = process.env.JWT_SECRET;
-    this.accessTokenExpiry = process.env.JWT_EXPIRES_IN || '1d';
-    this.refreshTokenExpiry = process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
-    
-    // Armazenamento em memória dos refresh tokens (em produção, use Redis ou banco)
-    this.refreshTokens = new Map();
+    this.secret = config.jwtSecret;
+    this.accessTokenExpiry = config.jwtExpiresIn;
+    this.refreshTokenExpiry = config.refreshTokenExpiresIn;
   }
 
   /**
-   * Gera access token e refresh token
+   * Gera um access token
+   * @param {Object} payload - Dados do usuário
+   * @returns {string} - Access token
    */
-  generateTokens(payload) {
-    // Access Token (expira em 1 dia)
-    const accessToken = jwt.sign(payload, this.jwtSecret, {
-      expiresIn: this.accessTokenExpiry,
-    });
-
-    // Refresh Token (expira em 30 dias)
-    const refreshToken = jwt.sign(
-      { 
-        userId: payload.id,
-        type: 'refresh'
-      }, 
-      this.jwtSecret, 
-      {
-        expiresIn: this.refreshTokenExpiry,
-      }
-    );
-
-    // Salva o refresh token associado ao usuário
-    this.refreshTokens.set(refreshToken, {
-      userId: payload.id,
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 dias
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      expiresIn: this.accessTokenExpiry
-    };
+  generateAccessToken(payload) {
+    try {
+      return jwt.sign(payload, this.secret, {
+        expiresIn: this.accessTokenExpiry,
+        issuer: 'saas-platform',
+        audience: 'saas-platform-users',
+      });
+    } catch (error) {
+      logger.error('Erro ao gerar access token:', error);
+      throw new Error('Erro ao gerar token de acesso');
+    }
   }
 
   /**
-   * Verifica se um access token é válido
+   * Gera um refresh token
+   * @param {Object} payload - Dados do usuário
+   * @returns {string} - Refresh token
+   */
+  generateRefreshToken(payload) {
+    try {
+      return jwt.sign(payload, this.secret, {
+        expiresIn: this.refreshTokenExpiry,
+        issuer: 'saas-platform',
+        audience: 'saas-platform-refresh',
+      });
+    } catch (error) {
+      logger.error('Erro ao gerar refresh token:', error);
+      throw new Error('Erro ao gerar refresh token');
+    }
+  }
+
+  /**
+   * Gera ambos os tokens (access e refresh)
+   * @param {Object} payload - Dados do usuário
+   * @returns {Object} - Objeto com access e refresh tokens
+   */
+  generateTokenPair(payload) {
+    try {
+      const accessToken = this.generateAccessToken(payload);
+      const refreshToken = this.generateRefreshToken(payload);
+
+      return {
+        accessToken,
+        refreshToken,
+        expiresIn: this.getTokenExpiry(this.accessTokenExpiry),
+      };
+    } catch (error) {
+      logger.error('Erro ao gerar par de tokens:', error);
+      throw new Error('Erro ao gerar tokens');
+    }
+  }
+
+  /**
+   * Verifica um access token
+   * @param {string} token - Token a ser verificado
+   * @returns {Object} - Payload decodificado
    */
   verifyAccessToken(token) {
     try {
-      return jwt.verify(token, this.jwtSecret);
+      return jwt.verify(token, this.secret, {
+        issuer: 'saas-platform',
+        audience: 'saas-platform-users',
+      });
     } catch (error) {
-      throw new Error('Access token inválido ou expirado');
+      if (error.name === 'TokenExpiredError') {
+        throw new Error('Token expirado');
+      }
+      if (error.name === 'JsonWebTokenError') {
+        throw new Error('Token inválido');
+      }
+      throw new Error('Erro ao verificar token');
     }
   }
 
   /**
-   * Verifica se um refresh token é válido
+   * Verifica um refresh token
+   * @param {string} token - Token a ser verificado
+   * @returns {Object} - Payload decodificado
    */
   verifyRefreshToken(token) {
     try {
-      const decoded = jwt.verify(token, this.jwtSecret);
-      
-      // Verifica se o refresh token existe no armazenamento
-      const storedToken = this.refreshTokens.get(token);
-      if (!storedToken) {
-        throw new Error('Refresh token não encontrado');
-      }
-
-      // Verifica se não expirou
-      if (new Date() > storedToken.expiresAt) {
-        this.refreshTokens.delete(token);
+      return jwt.verify(token, this.secret, {
+        issuer: 'saas-platform',
+        audience: 'saas-platform-refresh',
+      });
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
         throw new Error('Refresh token expirado');
       }
-
-      return decoded;
-    } catch (error) {
-      throw new Error('Refresh token inválido: ' + error.message);
+      if (error.name === 'JsonWebTokenError') {
+        throw new Error('Refresh token inválido');
+      }
+      throw new Error('Erro ao verificar refresh token');
     }
   }
 
   /**
-   * Renova os tokens usando um refresh token válido
+   * Renova um access token usando refresh token
+   * @param {string} refreshToken - Refresh token válido
+   * @returns {Object} - Novo par de tokens
    */
-  async refreshTokens(refreshToken, getUserData) {
+  refreshAccessToken(refreshToken) {
     try {
-      // Verifica o refresh token
-      const decoded = this.verifyRefreshToken(refreshToken);
+      const payload = this.verifyRefreshToken(refreshToken);
       
-      // Busca dados atualizados do usuário
-      const userData = await getUserData(decoded.userId);
+      // Remove campos sensíveis do payload
+      const { iat, exp, aud, iss, ...userData } = payload;
       
-      // Remove o refresh token antigo
-      this.refreshTokens.delete(refreshToken);
-      
-      // Gera novos tokens
-      const newTokens = this.generateTokens(userData);
-      
-      return {
-        success: true,
-        ...newTokens,
-        user: userData
-      };
+      // Gera novo par de tokens
+      return this.generateTokenPair(userData);
     } catch (error) {
-      throw new Error('Erro ao renovar tokens: ' + error.message);
+      logger.error('Erro ao renovar access token:', error);
+      throw error;
     }
   }
 
   /**
-   * Revoga um refresh token (logout)
+   * Decodifica um token sem verificar (para debug)
+   * @param {string} token - Token a ser decodificado
+   * @returns {Object} - Payload decodificado
    */
-  revokeRefreshToken(refreshToken) {
-    return this.refreshTokens.delete(refreshToken);
-  }
-
-  /**
-   * Revoga todos os refresh tokens de um usuário
-   */
-  revokeAllUserTokens(userId) {
-    let revokedCount = 0;
-    for (const [token, data] of this.refreshTokens.entries()) {
-      if (data.userId === userId) {
-        this.refreshTokens.delete(token);
-        revokedCount++;
-      }
+  decodeToken(token) {
+    try {
+      return jwt.decode(token);
+    } catch (error) {
+      logger.error('Erro ao decodificar token:', error);
+      throw new Error('Erro ao decodificar token');
     }
-    return revokedCount;
   }
 
   /**
-   * Limpa tokens expirados (executar periodicamente)
+   * Obtém o tempo de expiração em segundos
+   * @param {string} expiry - String de expiração (ex: '15m', '7d')
+   * @returns {number} - Tempo em segundos
    */
-  cleanExpiredTokens() {
-    const now = new Date();
-    let cleanedCount = 0;
-    
-    for (const [token, data] of this.refreshTokens.entries()) {
-      if (now > data.expiresAt) {
-        this.refreshTokens.delete(token);
-        cleanedCount++;
-      }
+  getTokenExpiry(expiry) {
+    const match = expiry.match(/^(\d+)([smhd])$/);
+    if (!match) {
+      return 900; // 15 minutos padrão
     }
-    
-    return cleanedCount;
-  }
 
-  /**
-   * Estatísticas dos tokens ativos
-   */
-  getTokenStats() {
-    return {
-      activeRefreshTokens: this.refreshTokens.size,
-      tokensPerUser: this.getTokensPerUser()
+    const [, value, unit] = match;
+    const multipliers = {
+      s: 1,
+      m: 60,
+      h: 3600,
+      d: 86400,
     };
+
+    return parseInt(value) * multipliers[unit];
   }
 
   /**
-   * Conta tokens por usuário
+   * Verifica se um token está próximo de expirar
+   * @param {string} token - Token a ser verificado
+   * @param {number} threshold - Limite em segundos (padrão: 5 minutos)
+   * @returns {boolean} - True se está próximo de expirar
    */
-  getTokensPerUser() {
-    const userTokens = {};
-    for (const [token, data] of this.refreshTokens.entries()) {
-      userTokens[data.userId] = (userTokens[data.userId] || 0) + 1;
+  isTokenNearExpiry(token, threshold = 300) {
+    try {
+      const decoded = jwt.decode(token);
+      if (!decoded || !decoded.exp) {
+        return true;
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      return decoded.exp - now <= threshold;
+    } catch (error) {
+      logger.error('Erro ao verificar expiração do token:', error);
+      return true;
     }
-    return userTokens;
+  }
+
+  /**
+   * Gera hash de senha
+   * @param {string} password - Senha em texto plano
+   * @returns {string} - Hash da senha
+   */
+  async hashPassword(password) {
+    try {
+      const saltRounds = config.bcryptRounds;
+      return await bcrypt.hash(password, saltRounds);
+    } catch (error) {
+      logger.error('Erro ao gerar hash da senha:', error);
+      throw new Error('Erro ao processar senha');
+    }
+  }
+
+  /**
+   * Verifica senha
+   * @param {string} password - Senha em texto plano
+   * @param {string} hash - Hash da senha
+   * @returns {boolean} - True se a senha está correta
+   */
+  async verifyPassword(password, hash) {
+    try {
+      return await bcrypt.compare(password, hash);
+    } catch (error) {
+      logger.error('Erro ao verificar senha:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Extrai token do header Authorization
+   * @param {string} authHeader - Header Authorization
+   * @returns {string|null} - Token ou null
+   */
+  extractTokenFromHeader(authHeader) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+    return authHeader.substring(7);
+  }
+
+  /**
+   * Valida formato do token
+   * @param {string} token - Token a ser validado
+   * @returns {boolean} - True se o formato é válido
+   */
+  isValidTokenFormat(token) {
+    if (!token || typeof token !== 'string') {
+      return false;
+    }
+    
+    // Verifica se tem 3 partes separadas por ponto
+    const parts = token.split('.');
+    return parts.length === 3;
   }
 }
 
-// Singleton instance
-const jwtService = new JwtService();
-
-// Limpa tokens expirados a cada hora
-setInterval(() => {
-  const cleaned = jwtService.cleanExpiredTokens();
-  if (cleaned > 0) {
-    console.log(`🧹 Limpeza automática: ${cleaned} refresh tokens expirados removidos`);
-  }
-}, 60 * 60 * 1000); // 1 hora
-
-module.exports = jwtService;
+module.exports = new JWTService();

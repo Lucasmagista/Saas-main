@@ -12,6 +12,8 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const http = require('http');
+const url = require('url');
 const logger = require('../logger.cjs');
 const { logAudit } = require('../auditHelper.cjs');
 const { startSession, stopSession, getQrcode, getLogs, isSessionActive } = require('../services/botManager.cjs');
@@ -19,6 +21,7 @@ const botsRepo = require('../repositories/botsRepository.cjs');
 const botLogsRepo = require('../repositories/botLogsRepository.cjs');
 
 const router = express.Router();
+
 // Schemas de validação
 const createBotSchema = z.object({
   name: z.string({ required_error: 'Nome é obrigatório' }).min(1),
@@ -30,12 +33,72 @@ const createBotSchema = z.object({
 // Configure multer for handling file uploads
 const upload = multer({ dest: path.join(__dirname, '../../uploads') });
 
+// Helper para validar URLs
+function isValidUrl(string) {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Helper para fazer requisições HTTP/HTTPS
+async function makeRequest(urlString, options = {}) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = url.parse(urlString);
+    const isHttps = parsedUrl.protocol === 'https:';
+    const client = isHttps ? https : http;
+    
+    const requestOptions = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: parsedUrl.path,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'saas-platform-bot-importer/1.0',
+        ...options.headers
+      },
+      timeout: 10000
+    };
+
+    const req = client.request(requestOptions, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve({ statusCode: res.statusCode, data, headers: res.headers });
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
 // Helper to scan a local file list and extract metadata (entry point, dependencies)
 async function scanLocalFiles(files) {
   const fileNames = files.map((f) => f.originalname);
   // Attempt to find a package.json among uploaded files
   let dependencies = [];
   let entryPoint = null;
+  let hasValidFiles = false;
+  
   for (const file of files) {
     if (file.originalname.toLowerCase() === 'package.json') {
       try {
@@ -43,112 +106,149 @@ async function scanLocalFiles(files) {
         const pkg = JSON.parse(pkgRaw);
         dependencies = pkg.dependencies ? Object.keys(pkg.dependencies) : [];
         entryPoint = pkg.main || 'index.js';
+        hasValidFiles = true;
       } catch (e) {
-        console.error('Erro ao analisar package.json:', e);
+        logger.error('Erro ao analisar package.json:', e);
       }
     }
-  }
-  return { fileNames, dependencies, entryPoint };
-}
-
-// Helper to fetch file list and package.json from a GitHub repository via the API
-async function scanRemoteRepo(repoUrl) {
-  // Extract owner and repo from URL (e.g., https://github.com/user/repo)
-  const match = repoUrl.match(/github\.com\/(.+?)\/(.+?)(\.git|$)/i);
-  if (!match) throw new Error('URL de repositório inválida');
-  const owner = match[1];
-  const repo = match[2];
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents`;
-  const githubToken = process.env.GITHUB_TOKEN;
-  const options = {
-    headers: {
-      'User-Agent': 'saas-platform',
-      Accept: 'application/vnd.github.v3+json',
-      ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
-    },
-  };
-  // Fetch repository contents
-  const listFiles = await new Promise((resolve, reject) => {
-    https
-      .get(apiUrl, options, (resp) => {
-        let data = '';
-        resp.on('data', (chunk) => (data += chunk));
-        resp.on('end', () => {
-          try {
-            if (resp.statusCode !== 200) {
-              let msg = `Erro ao acessar repositório remoto: status ${resp.statusCode}`;
-              try {
-                const errJson = JSON.parse(data);
-                if (errJson && errJson.message) msg += ` - ${errJson.message}`;
-              } catch {}
-              return reject(new Error(msg));
-            }
-            resolve(JSON.parse(data));
-          } catch (err) {
-            reject(new Error('Erro ao processar resposta da API do GitHub: ' + err.message));
-          }
-        });
-      })
-      .on('error', reject);
-  });
-  if (!Array.isArray(listFiles)) throw new Error('Não foi possível listar arquivos do repositório (resposta inesperada da API do GitHub)');
-  const fileNames = listFiles.map((item) => item.name);
-  // Attempt to retrieve package.json for dependencies and entry point
-  let dependencies = [];
-  let entryPoint = null;
-  const pkgItem = listFiles.find((item) => item.name.toLowerCase() === 'package.json');
-  if (pkgItem && pkgItem.download_url) {
-    const pkgRaw = await new Promise((resolve, reject) => {
-      https
-        .get(pkgItem.download_url, options, (resp) => {
-          let raw = '';
-          resp.on('data', (chunk) => (raw += chunk));
-          resp.on('end', () => {
-            if (resp.statusCode !== 200) {
-              return reject(new Error(`Erro ao baixar package.json: status ${resp.statusCode}`));
-            }
-            resolve(raw);
-          });
-        })
-        .on('error', reject);
-    });
-    try {
-      const pkg = JSON.parse(pkgRaw);
-      dependencies = pkg.dependencies ? Object.keys(pkg.dependencies) : [];
-      entryPoint = pkg.main || 'index.js';
-    } catch (e) {
-      console.error('Erro ao analisar package.json do repositório remoto:', e);
+    
+    // Verificar se é um arquivo JavaScript/TypeScript válido
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.js', '.jsx', '.ts', '.tsx', '.json'].includes(ext)) {
+      hasValidFiles = true;
     }
   }
+  
+  if (!hasValidFiles) {
+    throw new Error('Nenhum arquivo válido encontrado. Suportamos: .js, .jsx, .ts, .tsx, .json');
+  }
+  
   return { fileNames, dependencies, entryPoint };
 }
 
-// GET /bots - list bots from Supabase
-
-router.get('/', async (req, res) => {
-// POST /bots - Cria bot diretamente
-router.post('/', upload.none(), validate({ body: createBotSchema }), async (req, res) => {
-  try {
-            const { name, type, config, description } = req.body;
-            const bot = await botsRepo.insert({ name, type, config, description: description || null });
-            await logAudit({ req, action: 'create', resourceType: 'bot', resourceId: bot.id, newValues: bot });
-            res.json({ success: true, bot });
-  } catch (err) {
-            logger.error('Erro ao criar bot', { error: err });
-            res.status(500).json({ error: err.message });
+// Helper to fetch file list and package.json from a remote repository
+async function scanRemoteRepo(repoUrl) {
+  if (!isValidUrl(repoUrl)) {
+    throw new Error('URL inválida fornecida');
   }
-});
+
+  // Suporte para GitHub, GitLab e URLs diretas
+  let apiUrl, headers = {};
+  
+  if (repoUrl.includes('github.com')) {
+    // GitHub API
+    const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/i);
+    if (!match) {
+      throw new Error('URL do GitHub inválida. Formato esperado: https://github.com/user/repo');
+    }
+    const [, owner, repo] = match;
+    apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents`;
+    headers = {
+      'User-Agent': 'saas-platform-bot-importer',
+      'Accept': 'application/vnd.github.v3+json'
+    };
+    
+    // Adicionar token se disponível
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `token ${process.env.GITHUB_TOKEN}`;
+    }
+  } else if (repoUrl.includes('gitlab.com')) {
+    // GitLab API
+    const match = repoUrl.match(/gitlab\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/i);
+    if (!match) {
+      throw new Error('URL do GitLab inválida. Formato esperado: https://gitlab.com/user/repo');
+    }
+    const [, owner, repo] = match;
+    apiUrl = `https://gitlab.com/api/v4/projects/${encodeURIComponent(`${owner}/${repo}`)}/repository/tree`;
+    headers = {
+      'User-Agent': 'saas-platform-bot-importer'
+    };
+    
+    if (process.env.GITLAB_TOKEN) {
+      headers['PRIVATE-TOKEN'] = process.env.GITLAB_TOKEN;
+    }
+  } else {
+    // URL direta - tentar acessar como arquivo
+    try {
+      const response = await makeRequest(repoUrl);
+      const fileName = path.basename(repoUrl);
+      return { 
+        fileNames: [fileName], 
+        dependencies: [], 
+        entryPoint: fileName,
+        directUrl: true 
+      };
+    } catch (error) {
+      throw new Error(`Não foi possível acessar a URL: ${error.message}`);
+    }
+  }
+
+  try {
+    const response = await makeRequest(apiUrl, { headers });
+    const files = JSON.parse(response.data);
+    
+    if (!Array.isArray(files)) {
+      throw new Error('Resposta inesperada da API do repositório');
+    }
+    
+    const fileNames = files.map(item => item.name);
+    let dependencies = [];
+    let entryPoint = null;
+    
+    // Buscar package.json
+    const pkgFile = files.find(item => item.name.toLowerCase() === 'package.json');
+    if (pkgFile && pkgFile.download_url) {
+      try {
+        const pkgResponse = await makeRequest(pkgFile.download_url, { headers });
+        const pkg = JSON.parse(pkgResponse.data);
+        dependencies = pkg.dependencies ? Object.keys(pkg.dependencies) : [];
+        entryPoint = pkg.main || 'index.js';
+      } catch (e) {
+        logger.warn('Erro ao analisar package.json do repositório remoto:', e);
+      }
+    }
+    
+    // Verificar se há arquivos válidos
+    const validFiles = fileNames.filter(name => {
+      const ext = path.extname(name).toLowerCase();
+      return ['.js', '.jsx', '.ts', '.tsx', '.json'].includes(ext);
+    });
+    
+    if (validFiles.length === 0) {
+      throw new Error('Nenhum arquivo válido encontrado no repositório');
+    }
+    
+    return { fileNames, dependencies, entryPoint };
+  } catch (error) {
+    throw new Error(`Erro ao acessar repositório: ${error.message}`);
+  }
+}
+
+// GET /bots - list bots from database
+router.get('/', async (req, res) => {
   try {
     const data = await botsRepo.listAll();
     res.json(data);
   } catch (error) {
+    logger.error('Erro ao listar bots:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// POST /bots/import/local - import a bot from uploaded files
+// POST /bots - Cria bot diretamente
+router.post('/', upload.none(), validate({ body: createBotSchema }), async (req, res) => {
+  try {
+    const { name, type, config, description } = req.body;
+    const bot = await botsRepo.insert({ name, type, config, description: description || null });
+    await logAudit({ req, action: 'create', resourceType: 'bot', resourceId: bot.id, newValues: bot });
+    res.json({ success: true, bot });
+  } catch (err) {
+    logger.error('Erro ao criar bot', { error: err });
+    res.status(500).json({ error: err.message });
+  }
+});
 
-// Esquema para importação local
+// POST /bots/import/local - import a bot from uploaded files
 const importLocalSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
@@ -160,9 +260,11 @@ router.post('/import/local', upload.array('files'), validate({ body: importLocal
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'Nenhum arquivo recebido' });
     }
+    
     const { fileNames, dependencies, entryPoint } = await scanLocalFiles(files);
     const newName = req.body.name || path.parse(fileNames[0]).name;
     const description = req.body.description || null;
+    
     // Cria registro no repositório
     const data = await botsRepo.insert({
       name: newName,
@@ -171,6 +273,7 @@ router.post('/import/local', upload.array('files'), validate({ body: importLocal
       is_active: false,
       description,
     });
+    
     // Build response with scanning details
     res.json({
       bot: data,
@@ -181,7 +284,7 @@ router.post('/import/local', upload.array('files'), validate({ body: importLocal
       },
     });
   } catch (err) {
-    console.error(err);
+    logger.error('Erro ao importar bot local:', err);
     res.status(500).json({ error: err.message });
   } finally {
     // Remove uploaded temp files
@@ -193,20 +296,22 @@ router.post('/import/local', upload.array('files'), validate({ body: importLocal
   }
 });
 
-// POST /bots/import/remote - import a bot from a remote repository (GitHub)
-
-// Esquema para importação remota
+// POST /bots/import/remote - import a bot from a remote repository
 const importRemoteSchema = z.object({
-  url: z.string().min(1, 'URL do repositório é obrigatória'),
+  url: z.string().min(1, 'URL do repositório é obrigatória').refine(isValidUrl, 'URL inválida'),
   name: z.string().optional(),
   description: z.string().optional(),
 });
 
 router.post('/import/remote', express.json(), validate({ body: importRemoteSchema }), async (req, res) => {
   const { url, name, description } = req.body;
+  
   try {
-    const { fileNames, dependencies, entryPoint } = await scanRemoteRepo(url);
-    const botName = name || url.split('/').pop();
+    logger.info('Iniciando importação remota:', { url });
+    
+    const { fileNames, dependencies, entryPoint, directUrl } = await scanRemoteRepo(url);
+    const botName = name || (directUrl ? path.basename(url) : url.split('/').pop());
+    
     // Cria registro no repositório
     const data = await botsRepo.insert({
       name: botName,
@@ -215,12 +320,20 @@ router.post('/import/remote', express.json(), validate({ body: importRemoteSchem
       is_active: false,
       description: description || url,
     });
+    
+    logger.info('Bot importado com sucesso:', { botId: data.id, files: fileNames.length });
+    
     res.json({
       bot: data,
-      scan: { files: fileNames, dependencies, entryPoint },
+      scan: { 
+        files: fileNames, 
+        dependencies, 
+        entryPoint,
+        source: directUrl ? 'direct' : 'repository'
+      },
     });
   } catch (err) {
-    console.error('Erro ao importar bot remoto:', err);
+    logger.error('Erro ao importar bot remoto:', err);
     res.status(500).json({ error: err.message });
   }
 });

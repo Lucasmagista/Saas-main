@@ -35,12 +35,22 @@ import {
   Lock,
   FileCheck
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 
-type SupabaseDatabase = Database["public"]["Tables"]["compliance_policies"]["Row"];
-type PolicyInsert = Database["public"]["Tables"]["compliance_policies"]["Insert"];
-type PolicyUpdate = Database["public"]["Tables"]["compliance_policies"]["Update"];
+interface CompliancePolicy {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  assigned_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+type PolicyInsert = Omit<CompliancePolicy, 'id' | 'created_at' | 'updated_at'>;
+type PolicyUpdate = Partial<PolicyInsert>;
 
 interface PolicyFormData {
   title: string;
@@ -86,7 +96,7 @@ interface Training {
 }
 
 export const ComplianceManagement: React.FC = () => {
-  const [policies, setPolicies] = useState<SupabaseDatabase[]>([]);
+  const [policies, setPolicies] = useState<CompliancePolicy[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -104,7 +114,7 @@ export const ComplianceManagement: React.FC = () => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isCreateTrainingModalOpen, setIsCreateTrainingModalOpen] = useState(false);
-  const [selectedPolicy, setSelectedPolicy] = useState<SupabaseDatabase | null>(null);
+  const [selectedPolicy, setSelectedPolicy] = useState<CompliancePolicy | null>(null);
 
   // Form data
   const [formData, setFormData] = useState<PolicyFormData>({
@@ -164,12 +174,12 @@ export const ComplianceManagement: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await makeAuthenticatedRequest('/api/compliance/policies', 'GET');
       
-      if (error) throw error;
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Dados de políticas inválidos');
+      }
+      
       setPolicies(data || []);
     } catch (error: unknown) {
       setError("Erro ao buscar políticas: " + (error as Error).message);
@@ -182,13 +192,9 @@ export const ComplianceManagement: React.FC = () => {
     setLoadingAudit(true);
     try {
       // Simulando uma busca de logs de auditoria - você pode adaptar para sua tabela real
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .order("timestamp", { ascending: false })
-        .limit(50);
+      const data = await makeAuthenticatedRequest('/api/audit-logs?limit=50', 'GET');
       
-      if (error) {
+      if (!data || !Array.isArray(data)) {
         console.warn("Tabela audit_logs não encontrada, usando dados vazios");
         setAuditLogs([]);
       } else {
@@ -216,13 +222,10 @@ export const ComplianceManagement: React.FC = () => {
     setLoadingRetention(true);
     try {
       // Simulando uma busca de políticas de retenção - você pode adaptar para sua tabela real
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await makeAuthenticatedRequest('/api/compliance/policies', 'GET');
       
-      if (error) {
-        console.warn("Erro ao buscar políticas de retenção:", error);
+      if (!data || !Array.isArray(data)) {
+        console.warn("Erro ao buscar políticas de retenção: dados inválidos");
         setDataRetentionPolicies([]);
       } else {
         const formattedRetentionPolicies: DataRetentionPolicy[] = (data || []).map(policy => ({
@@ -249,13 +252,10 @@ export const ComplianceManagement: React.FC = () => {
   const fetchTrainings = async () => {
     setLoadingTrainings(true);
     try {
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await makeAuthenticatedRequest('/api/compliance/policies', 'GET');
       
-      if (error) {
-        console.warn("Erro ao buscar treinamentos:", error);
+      if (!data || !Array.isArray(data)) {
+        console.warn("Erro ao buscar treinamentos: dados inválidos");
         setTrainings([]);
       } else {
         const formattedTrainings: Training[] = (data || []).map(policy => ({
@@ -283,13 +283,11 @@ export const ComplianceManagement: React.FC = () => {
   // CRUD Functions
   const createPolicy = async () => {
     try {
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .insert([formData])
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest('/api/compliance/policies', 'POST', formData);
 
-      if (error) throw error;
+      if (!data) {
+        throw new Error('Erro ao criar política');
+      }
 
       setPolicies(prev => [data, ...prev]);
       setIsCreateModalOpen(false);
@@ -311,17 +309,14 @@ export const ComplianceManagement: React.FC = () => {
     if (!selectedPolicy) return;
 
     try {
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .update({
-          ...formData,
-          last_update: new Date().toISOString()
-        })
-        .eq("id", selectedPolicy.id)
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest(`/api/compliance/policies/${selectedPolicy.id}`, 'PUT', {
+        ...formData,
+        last_update: new Date().toISOString()
+      });
 
-      if (error) throw error;
+      if (!data) {
+        throw new Error('Erro ao atualizar política');
+      }
 
       setPolicies(prev => prev.map(policy => 
         policy.id === selectedPolicy.id ? data : policy
@@ -346,12 +341,7 @@ export const ComplianceManagement: React.FC = () => {
     if (!selectedPolicy) return;
 
     try {
-      const { error } = await supabase
-        .from("compliance_policies")
-        .delete()
-        .eq("id", selectedPolicy.id);
-
-      if (error) throw error;
+      await makeAuthenticatedRequest(`/api/compliance/policies/${selectedPolicy.id}`, 'DELETE');
 
       setPolicies(prev => prev.filter(policy => policy.id !== selectedPolicy.id));
       setIsDeleteDialogOpen(false);
@@ -383,13 +373,11 @@ export const ComplianceManagement: React.FC = () => {
         version: "1.0"
       };
 
-      const { data, error } = await supabase
-        .from("compliance_policies")
-        .insert([newTraining])
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest('/api/compliance/policies', 'POST', newTraining);
 
-      if (error) throw error;
+      if (!data) {
+        throw new Error('Erro ao criar treinamento');
+      }
 
       // Converte para formato de treinamento
       const formattedTraining: Training = {
@@ -427,7 +415,7 @@ export const ComplianceManagement: React.FC = () => {
     setIsCreateModalOpen(true);
   };
 
-  const handleEditPolicy = (policy: SupabaseDatabase) => {
+  const handleEditPolicy = (policy: CompliancePolicy) => {
     setSelectedPolicy(policy);
     setFormData({
       title: policy.title || "",
@@ -441,12 +429,12 @@ export const ComplianceManagement: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleViewPolicy = (policy: SupabaseDatabase) => {
+  const handleViewPolicy = (policy: CompliancePolicy) => {
     setSelectedPolicy(policy);
     setIsViewModalOpen(true);
   };
 
-  const handleDeletePolicy = (policy: SupabaseDatabase) => {
+  const handleDeletePolicy = (policy: CompliancePolicy) => {
     setSelectedPolicy(policy);
     setIsDeleteDialogOpen(true);
   };

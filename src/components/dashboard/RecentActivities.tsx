@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Activity } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { supabase } from '@/integrations/supabase/client';
+import { makeAuthenticatedRequest } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 
 interface Activity {
@@ -32,17 +32,10 @@ export const RecentActivities = () => {
 
     const fetchActivities = async () => {
       try {
-        const { data, error } = await supabase
-          .from('activities')
-          .select(`
-            *,
-            user:profiles(full_name, avatar_url)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (error) {
-          console.error('Error fetching activities:', error);
+        const data = await makeAuthenticatedRequest('/api/activities?limit=10', 'GET');
+        
+        if (!data || !Array.isArray(data)) {
+          console.error('Error fetching activities: invalid data');
           return;
         }
 
@@ -56,24 +49,13 @@ export const RecentActivities = () => {
 
     fetchActivities();
 
-    // Real-time subscription
-    const channel = supabase
-      .channel('recent-activities')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'activities'
-        },
-        () => {
-          fetchActivities();
-        }
-      )
-      .subscribe();
+    // Polling para simular real-time (substitui Supabase real-time)
+    const interval = setInterval(() => {
+      fetchActivities();
+    }, 30000); // Atualiza a cada 30 segundos
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [user]);
 

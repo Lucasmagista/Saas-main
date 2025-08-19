@@ -108,7 +108,7 @@ router.post('/webhook', express.json(), async (req, res) => {
       msgs.push(msg);
     }
 
-    // Persiste log no Supabase
+    // Persiste log no PostgreSQL
     await botLogsRepo.insert({
       bot_id: null,
       direction: 'received',

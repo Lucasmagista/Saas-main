@@ -28,14 +28,41 @@ import {
   FileText,
   Download
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 
-type Candidate = Database["public"]["Tables"]["candidates"]["Row"];
-type Resume = Database["public"]["Tables"]["resumes"]["Row"];
-type Job = Database["public"]["Tables"]["jobs"]["Row"];
-type CandidateInsert = Database["public"]["Tables"]["candidates"]["Insert"];
-type CandidateUpdate = Database["public"]["Tables"]["candidates"]["Update"];
+interface Candidate {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  position: string;
+  status: string;
+  source: string;
+  experience_years: number;
+  education: string;
+  skills: string[];
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Resume {
+  id: string;
+  candidate_id: string;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  created_at: string;
+}
+
+interface Job {
+  id: string;
+  title: string;
+  department: string;
+  status: string;
+}
+type CandidateInsert = Omit<Candidate, 'id' | 'created_at' | 'updated_at'>;
+type CandidateUpdate = Partial<CandidateInsert>;
 
 interface CandidateFormData {
   name: string;
@@ -117,27 +144,25 @@ export const CandidatesManagement = () => {
       
       try {
         // Fetch candidates
-        const { data: candidatesData, error: candidatesError } = await supabase
-          .from("candidates")
-          .select("*")
-          .order("created_at", { ascending: false });
+        const candidatesData = await makeAuthenticatedRequest('/api/candidates', 'GET');
         
-        if (candidatesError) throw candidatesError;
+        if (!candidatesData || !Array.isArray(candidatesData)) {
+          throw new Error('Dados de candidatos inválidos');
+        }
         
         // Fetch jobs
-        const { data: jobsData, error: jobsError } = await supabase
-          .from("jobs")
-          .select("*")
-          .eq("status", "active");
+        const jobsData = await makeAuthenticatedRequest('/api/jobs?status=active', 'GET');
         
-        if (jobsError) throw jobsError;
+        if (!jobsData || !Array.isArray(jobsData)) {
+          throw new Error('Dados de vagas inválidos');
+        }
         
         // Fetch resumes
-        const { data: resumesData, error: resumesError } = await supabase
-          .from("resumes")
-          .select("*");
+        const resumesData = await makeAuthenticatedRequest('/api/resumes', 'GET');
         
-        if (resumesError) throw resumesError;
+        if (!resumesData || !Array.isArray(resumesData)) {
+          throw new Error('Dados de currículos inválidos');
+        }
         
         setCandidates(candidatesData as Candidate[]);
         setJobs(jobsData as Job[]);
@@ -157,17 +182,14 @@ export const CandidatesManagement = () => {
     if (!selectedCandidate) return;
 
     try {
-      const { data, error } = await supabase
-        .from("candidates")
-        .update({
-          ...formData,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", selectedCandidate.id)
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest(`/api/candidates/${selectedCandidate.id}`, 'PUT', {
+        ...formData,
+        updated_at: new Date().toISOString()
+      });
 
-      if (error) throw error;
+      if (!data) {
+        throw new Error('Erro ao atualizar candidato');
+      }
 
       setCandidates(prev => prev.map(candidate => 
         candidate.id === selectedCandidate.id ? data : candidate
@@ -192,12 +214,9 @@ export const CandidatesManagement = () => {
     if (!selectedCandidate) return;
 
     try {
-      const { error } = await supabase
-        .from("candidates")
-        .delete()
-        .eq("id", selectedCandidate.id);
+      await makeAuthenticatedRequest(`/api/candidates/${selectedCandidate.id}`, 'DELETE');
 
-      if (error) throw error;
+      setCandidates(prev => prev.filter(candidate => candidate.id !== selectedCandidate.id));
 
       setCandidates(prev => prev.filter(candidate => candidate.id !== selectedCandidate.id));
       setIsDeleteDialogOpen(false);

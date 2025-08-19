@@ -25,12 +25,25 @@ import {
   Copy,
   ExternalLink
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 
-type Job = Database["public"]["Tables"]["jobs"]["Row"];
-type JobInsert = Database["public"]["Tables"]["jobs"]["Insert"];
-type JobUpdate = Database["public"]["Tables"]["jobs"]["Update"];
+interface Job {
+  id: string;
+  title: string;
+  department: string;
+  location: string;
+  type: string;
+  salary: string;
+  description: string;
+  requirements: string[];
+  status: string;
+  deadline: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+type JobInsert = Omit<Job, 'id' | 'created_at' | 'updated_at'>;
+type JobUpdate = Partial<JobInsert>;
 
 // Formulário para nova vaga
 interface JobFormData {
@@ -81,21 +94,13 @@ export const JobsManagement: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const data = await makeAuthenticatedRequest('/api/jobs', 'GET');
       
-      if (error) {
-        setError(error.message);
-        toast({
-          title: "Erro ao carregar vagas",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        setJobs(data || []);
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Dados de vagas inválidos');
       }
+      
+      setJobs(data || []);
     } catch (err) {
       console.error("Erro ao carregar vagas:", err);
       setError("Erro ao carregar vagas");
@@ -124,16 +129,12 @@ export const JobsManagement: React.FC = () => {
         deadline: formData.deadline || null,
       };
 
-      const { data, error } = await supabase
-        .from("jobs")
-        .insert(jobData)
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest('/api/jobs', 'POST', jobData);
 
-      if (error) {
+      if (!data) {
         toast({
           title: "Erro ao criar vaga",
-          description: error.message,
+          description: "Erro ao criar vaga",
           variant: "destructive",
         });
         return;
@@ -173,17 +174,12 @@ export const JobsManagement: React.FC = () => {
         deadline: formData.deadline || null,
       };
 
-      const { data, error } = await supabase
-        .from("jobs")
-        .update(jobData)
-        .eq("id", selectedJob.id)
-        .select()
-        .single();
+      const data = await makeAuthenticatedRequest(`/api/jobs/${selectedJob.id}`, 'PUT', jobData);
 
-      if (error) {
+      if (!data) {
         toast({
           title: "Erro ao atualizar vaga",
-          description: error.message,
+          description: "Erro ao atualizar vaga",
           variant: "destructive",
         });
         return;
@@ -212,19 +208,9 @@ export const JobsManagement: React.FC = () => {
     if (!selectedJob) return;
 
     try {
-      const { error } = await supabase
-        .from("jobs")
-        .delete()
-        .eq("id", selectedJob.id);
+      await makeAuthenticatedRequest(`/api/jobs/${selectedJob.id}`, 'DELETE');
 
-      if (error) {
-        toast({
-          title: "Erro ao excluir vaga",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
+      setJobs(jobs.filter(job => job.id !== selectedJob.id));
 
       setJobs(jobs.filter(job => job.id !== selectedJob.id));
       setIsDeleteDialogOpen(false);

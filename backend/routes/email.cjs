@@ -6,7 +6,7 @@ const router = express.Router();
 
 // GET /api/email/providers
 // Retorna a lista de provedores de e-mail configurados. Tenta carregar da
-// tabela `email_providers` do Supabase; se não existir ou houver erro,
+// tabela `email_providers` do PostgreSQL; se não existir ou houver erro,
 // retorna uma lista vazia. Em uma implementação completa, este endpoint
 // deveria suportar criação, atualização e remoção.
 router.get('/providers', async (req, res) => {

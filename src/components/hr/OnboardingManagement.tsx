@@ -7,8 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { 
   CheckCircle, 
   Clock, 
@@ -80,21 +79,11 @@ export const OnboardingManagement = () => {
 
   const fetchOnboardingEmployees = useCallback(async () => {
     try {
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          email,
-          full_name,
-          position,
-          department,
-          phone,
-          created_at,
-          avatar_url
-        `)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
+      const profiles = await makeAuthenticatedRequest('/api/users/profiles?order=created_at&limit=20', 'GET');
+      
+      if (!profiles || !Array.isArray(profiles)) {
+        throw new Error('Dados de perfis inválidos');
+      }
 
       const onboardingEmployees: OnboardingEmployee[] = (profiles || []).map((profile: ProfileWithOnboarding) => {
         const progress = calculateOnboardingProgress(profile);

@@ -8,10 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Search, Filter, Download, Eye } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 
-type Candidate = Database["public"]["Tables"]["candidates"]["Row"];
+interface Candidate {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  position: string;
+  status: string;
+  created_at: string;
+}
 
 /*
  * ResumeManagement
@@ -60,13 +67,10 @@ export const ResumeManagement: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const { data, error } = await supabase
-          .from("candidates")
-          .select("*")
-          .order("created_at", { ascending: false });
+        const data = await makeAuthenticatedRequest('/api/candidates', 'GET');
         
-        if (error) {
-          setError("Erro ao buscar candidatos: " + error.message);
+        if (!data || !Array.isArray(data)) {
+          setError("Erro ao buscar candidatos: dados inválidos");
         } else {
           setCandidates(data || []);
         }

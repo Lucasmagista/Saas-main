@@ -13,7 +13,7 @@ const Projects = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
 
-  // Buscar oportunidades (projetos) em tempo real via Supabase
+  // Buscar oportunidades (projetos) em tempo real via API backend
   const { data: opportunities } = useOpportunities();
 
   // Filtrar oportunidades conforme busca

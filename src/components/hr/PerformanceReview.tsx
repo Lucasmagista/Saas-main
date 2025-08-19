@@ -30,11 +30,18 @@ import {
   Eye,
   Plus
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+interface Profile {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  avatar_url: string | null;
+  created_at: string;
+}
 
 interface PerformanceData {
   id: string;
@@ -66,12 +73,11 @@ export const PerformanceReview = () => {
     setError(null);
     
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (profilesError) throw profilesError;
+      const profiles = await makeAuthenticatedRequest('/api/users/profiles', 'GET');
+      
+      if (!profiles || !Array.isArray(profiles)) {
+        throw new Error('Dados de perfis inválidos');
+      }
 
       // Gerar dados de performance baseados nos profiles reais
       const generatedPerformanceData: PerformanceData[] = (profiles || []).slice(0, 10).map((profile, index) => {

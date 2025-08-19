@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useInteractions, useCreateInteraction } from "@/hooks/useAdvancedCRM";
-import { supabase } from "@/integrations/supabase/client";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -79,16 +79,14 @@ export function CallCenter() {
   const { data: interactions, isLoading: loadingInteractions } = useInteractions();
   const createInteractionMutation = useCreateInteraction();
 
-  // Função para buscar contatos reais do Supabase
+  // Função para buscar contatos reais da API
   const fetchContacts = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, avatar_url, email')
-        .not('phone', 'is', null)
-        .limit(20);
-
-      if (error) throw error;
+      const data = await makeAuthenticatedRequest('/api/users/profiles?has_phone=true&limit=20', 'GET');
+      
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Dados de contatos inválidos');
+      }
       
       setContacts(data || []);
     } catch (error) {

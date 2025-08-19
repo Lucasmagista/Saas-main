@@ -58,7 +58,7 @@ const upload = multer({
   }
 }); // Usar buffer em memória
 
-// POST /api/files/upload - Upload de arquivo para Supabase Storage
+// POST /api/files/upload - Upload de arquivo para sistema de arquivos local
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'Arquivo obrigatório' });
@@ -66,7 +66,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     console.log(`[UPLOAD] Usuário: ${req.user?.id || 'anon'} - Arquivo: ${req.file.originalname}`);
     // Auditoria
     // Aqui você pode registrar no banco ou arquivo
-    // Exemplo: await supabase.from('audit_logs').insert({ user_id: req.user?.id, action: 'upload', file: req.file.originalname, date: new Date().toISOString() });
+    // Exemplo: await postgresClient.query('INSERT INTO audit_logs (user_id, action, file, date) VALUES ($1, $2, $3, $4)', [req.user?.id, 'upload', req.file.originalname, new Date().toISOString()]);
     const { originalname, buffer } = req.file;
     const { bucket = 'files' } = req.body;
     try {

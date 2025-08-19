@@ -5,6 +5,7 @@ const router = express.Router();
 const userRepo = require('../repositories/userRepository.cjs');
 const authenticateJWT = require('../middleware/authenticateJWT.cjs');
 const authorizeRole = require('../middleware/authorizeRole.cjs');
+const postgresClient = require('../postgresClient.cjs');
 // const auditLog = require('../middleware/auditLog'); // Importando o middleware de auditoria
 
 // Permissões padrão por role
@@ -17,38 +18,55 @@ const rolePermissions = {
 
 // GET perfil do usuário (exemplo: busca pelo id=1)
 router.get('/profile', async (req, res) => {
-  const userId = req.query.id || '1'; // Ajuste para pegar do token futuramente
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-  if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  try {
+    const userId = req.query.id || '1'; // Ajuste para pegar do token futuramente
+    const query = 'SELECT * FROM profiles WHERE id = $1';
+    const result = await postgresClient.query(query, [userId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Perfil não encontrado' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // PUT atualizar perfil do usuário
 router.put('/profile', express.json(), async (req, res) => {
-  const userId = req.body.id || '1';
-  const { data: oldUser } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single();
-  const { data, error } = await supabase
-    .from('profiles')
-    .update(req.body)
-    .eq('id', userId)
-    .select()
-    .single();
-  if (error) return res.status(500).json({ error: error.message });
-  await logAudit({ req, action: 'update', resourceType: 'user', resourceId: userId, oldValues: oldUser, newValues: data });
-  res.json(data);
+  try {
+    const userId = req.body.id || '1';
+    
+    // Buscar dados antigos
+    const oldQuery = 'SELECT * FROM profiles WHERE id = $1';
+    const oldResult = await postgresClient.query(oldQuery, [userId]);
+    const oldUser = oldResult.rows[0];
+    
+    // Atualizar dados
+    const updateQuery = `
+      UPDATE profiles 
+      SET name = $1, email = $2, avatar_url = $3, updated_at = $4
+      WHERE id = $5
+      RETURNING *
+    `;
+    const updateValues = [
+      req.body.name,
+      req.body.email,
+      req.body.avatar_url,
+      new Date().toISOString(),
+      userId
+    ];
+    const result = await postgresClient.query(updateQuery, updateValues);
+    
+    await logAudit({ req, action: 'update', resourceType: 'user', resourceId: userId, oldValues: oldUser, newValues: result.rows[0] });
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// POST upload de avatar (simulação, salvaria no Supabase Storage)
+// POST upload de avatar (simulação, salvaria no sistema de arquivos local)
 router.post('/avatar', async (req, res) => {
-  // Aqui você faria upload real para Supabase Storage
+  // Aqui você faria upload real para sistema de arquivos local
   // Exemplo: retorna URL mock
   res.json({ avatarUrl: '/placeholder.svg' });
 });

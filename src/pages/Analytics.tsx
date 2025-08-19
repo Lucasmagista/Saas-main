@@ -12,7 +12,7 @@ import { useOpportunities } from "@/hooks/useAdvancedCRM";
 const Analytics = () => {
   const [timeRange, setTimeRange] = useState("6months");
 
-  // Buscar métricas de performance, leads e oportunidades em tempo real via Supabase
+  // Buscar métricas de performance, leads e oportunidades em tempo real via API backend
   const { data: metrics } = usePerformanceMetrics();
   const { leads } = useLeads();
   const { data: opportunities } = useOpportunities();

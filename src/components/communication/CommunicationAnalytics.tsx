@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import { supabase } from "@/integrations/supabase/client";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -106,25 +106,19 @@ export function CommunicationAnalytics() {
   // Função para buscar performance da equipe real
   const fetchTeamPerformance = useCallback(async () => {
     try {
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, last_login, email')
-        .not('full_name', 'is', null)
-        .limit(10);
-
-      if (error) throw error;
+      const profiles = await makeAuthenticatedRequest('/api/users/profiles', 'GET');
+      
+      if (!profiles || !Array.isArray(profiles)) {
+        throw new Error('Dados de perfis inválidos');
+      }
 
       // Buscar métricas de interações para cada membro
       const teamData = await Promise.all(
         (profiles || []).map(async (profile) => {
-          const { data: interactions, error: interactionError } = await supabase
-            .from('interactions')
-            .select('*')
-            .eq('user_id', profile.id)
-            .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+          const interactions = await makeAuthenticatedRequest(`/api/interactions?user_id=${profile.id}&since=${new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()}`, 'GET');
 
-          if (interactionError) {
-            console.error('Erro ao buscar interações:', interactionError);
+          if (!interactions || !Array.isArray(interactions)) {
+            console.error('Erro ao buscar interações para usuário:', profile.id);
             return null;
           }
 

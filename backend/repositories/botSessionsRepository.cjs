@@ -32,7 +32,8 @@ async function getAll() {
 }
 
 async function deleteSession(sessionId) {
-  const { error } = await supabase
+  // Implementar com PostgreSQL local
+const error = await postgresClient.query('INSERT INTO bot_sessions (session_id, qr_data, status) VALUES ($1, $2, $3)', [sessionId, qrData, status]);
     .from(TABLE)
     .delete()
     .eq('session_id', sessionId);

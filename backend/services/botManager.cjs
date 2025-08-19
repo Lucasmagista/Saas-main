@@ -43,7 +43,7 @@ async function startSession(bot) {
     // Captura evento de QR code
     client.on('qr', async (qrCode) => {
       sessions[botId].qrcode = qrCode;
-      // Persistir o QR code e status da sessão no Supabase
+      // Persistir o QR code e status da sessão no PostgreSQL
       const sessionData = {
         session_id: botId,
         created_at: persistedSession ? persistedSession.created_at : new Date().toISOString(),

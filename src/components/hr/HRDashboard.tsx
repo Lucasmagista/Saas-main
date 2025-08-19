@@ -4,8 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { 
   BarChart, 
   Bar, 
@@ -30,7 +29,15 @@ import {
   Calendar
 } from "lucide-react";
 
-type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+interface ProfileRow {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface DepartmentData {
   name: string;
@@ -91,12 +98,11 @@ export const HRDashboard: React.FC = () => {
   const fetchHRMetrics = useCallback(async () => {
     try {
       // Buscar total de funcionários
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, department, created_at, full_name")
-        .order("created_at", { ascending: false });
-
-      if (profilesError) throw profilesError;
+      const profiles = await makeAuthenticatedRequest('/api/users/profiles', 'GET');
+      
+      if (!profiles || !Array.isArray(profiles)) {
+        throw new Error('Dados de perfis inválidos');
+      }
 
       const totalEmployees = profiles?.length || 0;
       

@@ -17,12 +17,26 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type Job = Database["public"]["Tables"]["jobs"]["Row"];
+interface Profile {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Job {
+  id: string;
+  title: string;
+  department: string;
+  status: string;
+  created_at: string;
+}
 
 interface AnalyticsData {
   hiringTrendData: Array<{
@@ -73,15 +87,19 @@ export const HRAnalytics = () => {
     try {
       // Buscar dados em paralelo
       const [profilesResult, jobsResult] = await Promise.all([
-        supabase.from("profiles").select("*"),
-        supabase.from("jobs").select("*")
+        makeAuthenticatedRequest('/api/users/profiles', 'GET'),
+        makeAuthenticatedRequest('/api/jobs', 'GET')
       ]);
 
-      if (profilesResult.error) throw profilesResult.error;
-      if (jobsResult.error) throw jobsResult.error;
+      if (!profilesResult || !Array.isArray(profilesResult)) {
+        throw new Error('Dados de perfis inválidos');
+      }
+      if (!jobsResult || !Array.isArray(jobsResult)) {
+        throw new Error('Dados de vagas inválidos');
+      }
 
-      const profiles = profilesResult.data as Profile[];
-      const jobs = jobsResult.data as Job[];
+      const profiles = profilesResult as Profile[];
+      const jobs = jobsResult as Job[];
       
       // Calcular dados analytics baseados nos dados reais
       const analytics = calculateAnalyticsData(profiles, jobs);

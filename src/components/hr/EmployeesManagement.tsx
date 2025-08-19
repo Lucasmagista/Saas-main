@@ -8,8 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { 
   Search, 
   Filter, 
@@ -49,26 +48,16 @@ export const EmployeesManagement = () => {
   const [loading, setLoading] = useState(true);
   const [departments, setDepartments] = useState<string[]>([]);
 
-  // Função para buscar funcionários reais do Supabase
+  // Função para buscar funcionários reais da API
   const fetchEmployees = useCallback(async () => {
     try {
-      const { data: profiles, error } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          email,
-          full_name,
-          position,
-          department,
-          phone,
-          created_at,
-          avatar_url
-        `)
-        .order("created_at", { ascending: false });
+      const profiles = await makeAuthenticatedRequest('/api/users/profiles', 'GET');
+      
+      if (!profiles || !Array.isArray(profiles)) {
+        throw new Error('Dados de perfis inválidos');
+      }
 
-      if (error) throw error;
-
-      // Transformar dados do Supabase para o formato Employee
+      // Transformar dados da API para o formato Employee
       const employeesData: Employee[] = (profiles || []).map(profile => {
         // Calcular performance baseada em completude do perfil
         const profileFields = [

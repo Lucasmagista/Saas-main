@@ -523,7 +523,7 @@ router.post('/:id/stop', validate({ params: idParamSchema }), async (req, res) =
 
 router.get('/:id/status', validate({ params: idParamSchema }), async (req, res) => {
   const { id } = req.params;
-  // status calculado pela memória + supabase
+  // status calculado pela memória + PostgreSQL
   const active = isSessionActive(id);
   res.json({ active });
 });

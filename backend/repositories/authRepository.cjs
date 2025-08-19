@@ -2,7 +2,8 @@
 const jwtService = require('../services/jwtService.cjs');
 
 async function signInWithPassword(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  // Implementar autenticação com PostgreSQL local
+const data = await postgresClient.query('SELECT * FROM users WHERE email = $1', [email]);
   if (error) throw new Error(error.message);
   
   // Busca dados completos do usuário incluindo role e permissões
@@ -32,7 +33,8 @@ async function signInWithPassword(email, password) {
 }
 
 async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Implementar registro com PostgreSQL local
+const data = await postgresClient.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING *', [email, password]);
   if (error) throw new Error(error.message);
   
   // Se o usuário foi criado com sucesso, gera tokens

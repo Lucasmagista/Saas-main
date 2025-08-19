@@ -43,7 +43,7 @@ import { saveAs } from 'file-saver';
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, 'cargos_permissoes.csv');
   };
-import { supabase } from '@/integrations/supabase/client';
+import { makeAuthenticatedRequest } from '@/lib/api';
 
 interface RolePermissionsManagementProps {
   onClose?: () => void;
@@ -224,44 +224,36 @@ export const RolePermissionsManagement: React.FC<RolePermissionsManagementProps>
     if (!selectedRole) return;
     try {
       // 1. Cria o novo cargo no banco
-      const { data: newRole, error: createError } = await supabase
-        .from('roles')
-        .insert({
-          name: selectedRole.name + ' (Cópia)',
-          description: selectedRole.description || '',
-          color: selectedRole.color || '#6366f1',
-          is_active: true,
-          is_system_role: false,
-        })
-        .select()
-        .single();
-      if (createError || !newRole) {
-        alert('Erro ao duplicar cargo: ' + (createError?.message || 'Erro desconhecido'));
+      const newRole = await makeAuthenticatedRequest('/api/roles', 'POST', {
+        name: selectedRole.name + ' (Cópia)',
+        description: selectedRole.description || '',
+        color: selectedRole.color || '#6366f1',
+        is_active: true,
+        is_system_role: false,
+      });
+      
+      if (!newRole) {
+        alert('Erro ao duplicar cargo: dados inválidos');
         return;
       }
+      
       // 2. Busca permissões do cargo original
-      const { data: origPerms, error: permsError } = await supabase
-        .from('role_permissions')
-        .select('permission_id, granted')
-        .eq('role_id', selectedRole.id);
-      if (permsError) {
-        alert('Erro ao buscar permissões do cargo original: ' + permsError.message);
+      const origPerms = await makeAuthenticatedRequest(`/api/roles/${selectedRole.id}/permissions`, 'GET');
+      
+      if (!origPerms || !Array.isArray(origPerms)) {
+        alert('Erro ao buscar permissões do cargo original: dados inválidos');
         return;
       }
+      
       // 3. Copia permissões para o novo cargo
       if (origPerms && origPerms.length > 0) {
-        const newPerms = (origPerms as { permission_id: string; granted: boolean }[]).map((p) => ({
+        const newPerms = origPerms.map((p: any) => ({
           role_id: newRole.id,
           permission_id: p.permission_id,
           granted: p.granted,
         }));
-        const { error: copyError } = await supabase
-          .from('role_permissions')
-          .upsert(newPerms);
-        if (copyError) {
-          alert('Erro ao copiar permissões: ' + copyError.message);
-          return;
-        }
+        
+        await makeAuthenticatedRequest(`/api/roles/${newRole.id}/permissions`, 'POST', newPerms);
       }
       // 4. Atualiza UI
       setSelectedRoleId(newRole.id);

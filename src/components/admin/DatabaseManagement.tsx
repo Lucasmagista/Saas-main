@@ -9,12 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Database as DatabaseIcon, RefreshCw, Download, Upload, Activity, Zap, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { makeAuthenticatedRequest } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { Database } from "@/integrations/supabase/types";
 
 // Tipo para tabelas disponíveis
-type TableName = keyof Database['public']['Tables'];
+type TableName = 'profiles' | 'organizations' | 'user_roles' | 'permissions' | 'roles' | 'role_permissions' | 'leads' | 'opportunities' | 'bots' | 'multisessions' | 'audit_logs' | 'conversations' | 'messages';
 
 interface DatabaseStats {
   totalUsers: number;
@@ -79,15 +78,15 @@ LIMIT 10;`);
     try {
       // Buscar estatísticas do banco
       const [usersResult, leadsResult, botsResult] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('leads').select('id', { count: 'exact', head: true }),
-        supabase.from('bots').select('id').eq('is_active', true)
+        makeAuthenticatedRequest('/api/users/profiles?count=true', 'GET'),
+        makeAuthenticatedRequest('/api/leads?count=true', 'GET'),
+        makeAuthenticatedRequest('/api/bots?is_active=true', 'GET')
       ]);
 
       setDbStats({
-        totalUsers: usersResult.count || 0,
-        totalLeads: leadsResult.count || 0,
-        activeBots: botsResult.data?.length || 0,
+        totalUsers: usersResult?.count || usersResult?.length || 0,
+        totalLeads: leadsResult?.count || leadsResult?.length || 0,
+        activeBots: botsResult?.length || 0,
         databaseSize: "2.4 GB", // Placeholder - seria necessário uma função específica
         lastBackup: "Há 2 horas" // Placeholder
       });
@@ -110,7 +109,7 @@ LIMIT 10;`);
     
     try {
       // Para consultas SELECT, usar o RPC que permita execução segura
-      // Este é um placeholder - seria necessário implementar uma função RPC no Supabase
+      // Este é um placeholder - seria necessário implementar uma função RPC no PostgreSQL
       toast({
         title: "Aviso",
         description: "Funcionalidade de execução de SQL personalizada em desenvolvimento. Por segurança, use as consultas pré-definidas por enquanto.",
@@ -151,12 +150,11 @@ LIMIT 10;`);
     setIsExecuting(true);
     
     try {
-      const { data, error } = await supabase
-        .from(selectedTable)
-        .select('*')
-        .limit(parseInt(limit));
-
-      if (error) throw error;
+      const data = await makeAuthenticatedRequest(`/api/admin/tables/${selectedTable}?limit=${limit}`, 'GET');
+      
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Dados inválidos');
+      }
 
       if (data && data.length > 0) {
         const columns = Object.keys(data[0]);

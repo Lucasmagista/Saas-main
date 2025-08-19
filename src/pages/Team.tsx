@@ -827,7 +827,7 @@ const Team = () => {
 													<Button
 														size="sm"
 														onClick={async () => {
-															// Em produção, integraria com Supabase para criar o usuário
+															// Em produção, integraria com API backend para criar o usuário
 															// Exemplo: await createUser(newUser)
 															setShowAddModal(false);
 															setNewUser({

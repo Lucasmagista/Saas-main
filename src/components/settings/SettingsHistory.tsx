@@ -29,7 +29,7 @@ export function SettingsHistoryComponent({ history }: SettingsHistoryProps) {
     }
   };
 
-  const formatChanges = (changes: Record<string, any>) => {
+  const formatChanges = (changes: Record<string, string | number | boolean>) => {
     return Object.entries(changes).map(([key, value]) => (
       <div key={key} className="text-xs text-muted-foreground">
         <span className="font-medium">{key}:</span> {String(value).substring(0, 50)}

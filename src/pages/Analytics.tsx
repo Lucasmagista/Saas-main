@@ -181,7 +181,7 @@ const Analytics = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
-                    <Tooltip formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR')}`, 'Receita']} />
+                    <Tooltip formatter={(value: number | string) => [`R$ ${Number(value).toLocaleString('pt-BR')}`, 'Receita']} />
                     <Area type="monotone" dataKey="revenue" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
                   </AreaChart>
                 </ResponsiveContainer>

@@ -47,7 +47,15 @@ export interface Contact {
 }
 
 // Hooks para Leads
-export const useLeads = (filters?: any) => {
+interface LeadFilters {
+  status?: string;
+  source?: string;
+  assigned_to?: string;
+  created_after?: string;
+  created_before?: string;
+}
+
+export const useLeads = (filters?: LeadFilters) => {
   return useQuery({
     queryKey: ['leads', filters],
     queryFn: async () => {
@@ -79,8 +87,9 @@ export const useCreateLead = () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Lead criado com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao criar lead');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao criar lead';
+      toast.error(errorMsg);
     }
   });
 };
@@ -100,8 +109,9 @@ export const useUpdateLead = () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Lead atualizado com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao atualizar lead');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao atualizar lead';
+      toast.error(errorMsg);
     }
   });
 };
@@ -119,14 +129,24 @@ export const useDeleteLead = () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast.success('Lead removido com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao remover lead');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao remover lead';
+      toast.error(errorMsg);
     }
   });
 };
 
 // Hooks para Opportunities
-export const useOpportunities = (filters?: any) => {
+interface OpportunityFilters {
+  stage?: string;
+  assigned_to?: string;
+  created_after?: string;
+  created_before?: string;
+  min_value?: number;
+  max_value?: number;
+}
+
+export const useOpportunities = (filters?: OpportunityFilters) => {
   return useQuery({
     queryKey: ['opportunities', filters],
     queryFn: async () => {
@@ -158,8 +178,9 @@ export const useCreateOpportunity = () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       toast.success('Oportunidade criada com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao criar oportunidade');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao criar oportunidade';
+      toast.error(errorMsg);
     }
   });
 };
@@ -179,8 +200,9 @@ export const useUpdateOpportunity = () => {
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       toast.success('Oportunidade atualizada com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao atualizar oportunidade');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao atualizar oportunidade';
+      toast.error(errorMsg);
     }
   });
 };
@@ -213,8 +235,9 @@ export const useCreateContact = () => {
       queryClient.invalidateQueries({ queryKey: ['contacts', variables.lead_id] });
       toast.success('Contato criado com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao criar contato');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao criar contato';
+      toast.error(errorMsg);
     }
   });
 };

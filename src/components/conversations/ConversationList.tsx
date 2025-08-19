@@ -12,7 +12,16 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface ConversationListProps {
-  onSelectConversation: (conversation: any) => void;
+  onSelectConversation: (conversation: {
+    id: string;
+    channel: string;
+    status: string;
+    lead?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+    };
+  }) => void;
   selectedConversationId?: string;
 }
 

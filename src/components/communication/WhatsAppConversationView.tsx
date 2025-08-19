@@ -35,7 +35,15 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 
 interface WhatsAppConversationViewProps {
-  conversation: any;
+  conversation: {
+    id: string;
+    lead?: {
+      name?: string;
+      phone?: string;
+    };
+    status: string;
+    tags?: string[];
+  };
 }
 
 export const WhatsAppConversationView = ({ conversation }: WhatsAppConversationViewProps) => {
@@ -140,7 +148,7 @@ export const WhatsAppConversationView = ({ conversation }: WhatsAppConversationV
     );
   };
 
-  const renderMessageContent = (msg: any) => {
+  const renderMessageContent = (msg: { message_type: string; content: string }) => {
     switch (msg.message_type) {
       case 'image':
         return (
@@ -207,7 +215,7 @@ export const WhatsAppConversationView = ({ conversation }: WhatsAppConversationV
         
         {conversation.tags && conversation.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {conversation.tags.map((tag: string, index: number) => (
+            {conversation.tags?.map((tag: string, index: number) => (
               <Badge key={index} variant="outline" className="text-xs">
                 {tag}
               </Badge>

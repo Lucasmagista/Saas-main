@@ -12,14 +12,14 @@ export interface Notification {
   read: boolean;
   created_at: string;
   user_id: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 export interface CreateNotificationData {
   title: string;
   message: string;
   type?: 'info' | 'success' | 'warning' | 'error';
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 export const useNotifications = () => {
@@ -35,8 +35,9 @@ export const useNotifications = () => {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications`);
       setNotifications(response.data);
       setUnreadCount(response.data.filter((n: Notification) => !n.read).length);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar notificações');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao carregar notificações';
+      setError(errorMsg);
       console.error('Erro ao buscar notificações:', err);
     } finally {
       setLoading(false);
@@ -52,8 +53,8 @@ export const useNotifications = () => {
       setNotifications(prev => [response.data, ...prev]);
       setUnreadCount(prev => prev + 1);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar notificação';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao criar notificação';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -70,8 +71,8 @@ export const useNotifications = () => {
         )
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao marcar notificação como lida';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao marcar notificação como lida';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -86,8 +87,8 @@ export const useNotifications = () => {
         prev.map(notification => ({ ...notification, read: true }))
       );
       setUnreadCount(0);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao marcar todas as notificações como lidas';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao marcar todas as notificações como lidas';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -103,8 +104,8 @@ export const useNotifications = () => {
       if (notification && !notification.read) {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar notificação';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar notificação';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -117,8 +118,8 @@ export const useNotifications = () => {
       });
       setNotifications([]);
       setUnreadCount(0);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao limpar notificações';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao limpar notificações';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -128,22 +129,22 @@ export const useNotifications = () => {
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications/settings`);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao carregar configurações de notificação';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao carregar configurações de notificação';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
   };
 
-  const updateNotificationSettings = async (settings: any) => {
+  const updateNotificationSettings = async (settings: Record<string, unknown>) => {
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/notifications/settings`, {
         method: 'PUT',
         data: settings,
       });
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar configurações de notificação';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar configurações de notificação';
       setError(errorMsg);
       throw new Error(errorMsg);
     }

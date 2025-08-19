@@ -154,7 +154,7 @@ export function CommunicationSettings() {
     apiKeys: false
   });
 
-  const updateSetting = (section: string, key: string, value: any) => {
+  const updateSetting = (section: string, key: string, value: string | number | boolean) => {
     setSettings(prev => ({
       ...prev,
       [section]: {
@@ -164,7 +164,7 @@ export function CommunicationSettings() {
     }));
   };
 
-  const updateNestedSetting = (section: string, subsection: string, key: string, value: any) => {
+  const updateNestedSetting = (section: string, subsection: string, key: string, value: string | number | boolean) => {
     setSettings(prev => ({
       ...prev,
       [section]: {

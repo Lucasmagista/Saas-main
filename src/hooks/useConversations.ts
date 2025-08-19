@@ -15,7 +15,7 @@ export interface Conversation {
   updated_at: string;
   status: 'active' | 'archived' | 'deleted';
   type: 'direct' | 'group';
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface Message {
@@ -24,7 +24,7 @@ export interface Message {
   sender_id: string;
   content: string;
   type: 'text' | 'media' | 'file' | 'system';
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   created_at: string;
   read: boolean;
   delivered: boolean;
@@ -34,14 +34,14 @@ export interface CreateConversationData {
   title: string;
   participants: string[];
   type?: 'direct' | 'group';
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SendMessageData {
   conversation_id: string;
   content: string;
   type?: 'text' | 'media' | 'file' | 'system';
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export const useConversations = () => {
@@ -56,8 +56,8 @@ export const useConversations = () => {
       setError(null);
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/conversations`);
       setConversations(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar conversas');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar conversas');
       console.error('Erro ao buscar conversas:', err);
     } finally {
       setLoading(false);
@@ -72,8 +72,8 @@ export const useConversations = () => {
       });
       setConversations(prev => [...prev, response.data]);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar conversa';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao criar conversa';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -87,8 +87,8 @@ export const useConversations = () => {
       });
       setConversations(prev => prev.map(conv => conv.id === id ? response.data : conv));
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar conversa';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar conversa';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -102,8 +102,8 @@ export const useConversations = () => {
       setConversations(prev => prev.filter(conv => conv.id !== id));
       // Limpar mensagens da conversa deletada
       setMessages(prev => prev.filter(msg => msg.conversation_id !== id));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar conversa';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar conversa';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -115,8 +115,8 @@ export const useConversations = () => {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/conversations/${conversationId}/messages`);
       setMessages(response.data);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao carregar mensagens';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao carregar mensagens';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -143,8 +143,8 @@ export const useConversations = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao enviar mensagem';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao enviar mensagem';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -158,8 +158,8 @@ export const useConversations = () => {
       setMessages(prev => 
         prev.map(msg => msg.id === messageId ? { ...msg, read: true } : msg)
       );
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao marcar mensagem como lida';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao marcar mensagem como lida';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -184,8 +184,8 @@ export const useConversations = () => {
             : msg
         )
       );
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao marcar conversa como lida';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao marcar conversa como lida';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -197,8 +197,8 @@ export const useConversations = () => {
         method: 'DELETE',
       });
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar mensagem';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar mensagem';
       setError(errorMsg);
       throw new Error(errorMsg);
     }

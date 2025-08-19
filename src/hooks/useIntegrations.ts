@@ -9,7 +9,7 @@ export interface Integration {
   name: string;
   type: 'webhook' | 'api' | 'database' | 'email' | 'sms' | 'whatsapp' | 'slack' | 'discord' | 'telegram' | 'custom';
   provider: string;
-  config: Record<string, any>;
+  config: Record<string, string | number | boolean>;
   is_active: boolean;
   status: 'connected' | 'disconnected' | 'error' | 'pending';
   last_sync?: string;
@@ -17,25 +17,25 @@ export interface Integration {
   created_at: string;
   updated_at: string;
   created_by?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateIntegrationData {
   name: string;
   type: 'webhook' | 'api' | 'database' | 'email' | 'sms' | 'whatsapp' | 'slack' | 'discord' | 'telegram' | 'custom';
   provider: string;
-  config: Record<string, any>;
+  config: Record<string, string | number | boolean>;
   is_active?: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateIntegrationData {
   name?: string;
   type?: 'webhook' | 'api' | 'database' | 'email' | 'sms' | 'whatsapp' | 'slack' | 'discord' | 'telegram' | 'custom';
   provider?: string;
-  config?: Record<string, any>;
+  config?: Record<string, string | number | boolean>;
   is_active?: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntegrationFilters {
@@ -69,8 +69,8 @@ export const useIntegrations = () => {
       const url = `${API_BASE}/api/integrations${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await makeAuthenticatedRequest(url);
       setIntegrations(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar integrações');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar integrações');
       console.error('Erro ao buscar integrações:', err);
     } finally {
       setLoading(false);
@@ -85,8 +85,8 @@ export const useIntegrations = () => {
       });
       setIntegrations(prev => [response.data, ...prev]);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao criar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -100,8 +100,8 @@ export const useIntegrations = () => {
       });
       setIntegrations(prev => prev.map(integration => integration.id === id ? response.data : integration));
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -113,8 +113,8 @@ export const useIntegrations = () => {
         method: 'DELETE',
       });
       setIntegrations(prev => prev.filter(integration => integration.id !== id));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -126,8 +126,8 @@ export const useIntegrations = () => {
         method: 'POST',
       });
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao testar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao testar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -147,8 +147,8 @@ export const useIntegrations = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao sincronizar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao sincronizar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -167,8 +167,8 @@ export const useIntegrations = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao habilitar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao habilitar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -187,8 +187,8 @@ export const useIntegrations = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao desabilitar integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao desabilitar integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -198,8 +198,8 @@ export const useIntegrations = () => {
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/integrations/${id}/logs?limit=${limit}`);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao carregar logs da integração';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao carregar logs da integração';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -218,8 +218,8 @@ export const useIntegrations = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar integrações em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar integrações em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -232,8 +232,8 @@ export const useIntegrations = () => {
         data: { ids },
       });
       setIntegrations(prev => prev.filter(integration => !ids.includes(integration.id)));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar integrações em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar integrações em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }

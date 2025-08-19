@@ -18,7 +18,7 @@ export interface WebhookDelivery {
   id: string;
   webhook_id: string;
   event: string;
-  payload: any;
+  payload: Record<string, unknown>;
   status: 'pending' | 'success' | 'failed';
   response_code?: number;
   response_body?: string;
@@ -146,8 +146,9 @@ export const useCreateWebhook = () => {
       queryClient.invalidateQueries({ queryKey: ['webhooks'] });
       toast.success('Webhook criado com sucesso');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao criar webhook');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao criar webhook';
+      toast.error(errorMsg);
     },
   });
 };
@@ -168,8 +169,9 @@ export const useUpdateWebhook = () => {
       queryClient.invalidateQueries({ queryKey: ['webhook', id] });
       toast.success('Webhook atualizado com sucesso');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao atualizar webhook');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao atualizar webhook';
+      toast.error(errorMsg);
     },
   });
 };
@@ -188,8 +190,9 @@ export const useDeleteWebhook = () => {
       queryClient.invalidateQueries({ queryKey: ['webhooks'] });
       toast.success('Webhook removido com sucesso');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao remover webhook');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao remover webhook';
+      toast.error(errorMsg);
     },
   });
 };
@@ -198,7 +201,7 @@ export const useTestWebhook = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, event, payload }: { id: string; event: string; payload?: any }) => {
+    mutationFn: async ({ id, event, payload }: { id: string; event: string; payload?: Record<string, unknown> }) => {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/webhooks/${id}/test`, {
         method: 'POST',
         data: { event, payload },
@@ -208,8 +211,9 @@ export const useTestWebhook = () => {
     onSuccess: () => {
       toast.success('Teste de webhook realizado com sucesso');
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao testar webhook');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao testar webhook';
+      toast.error(errorMsg);
     },
   });
 };
@@ -230,8 +234,9 @@ export const useRegenerateWebhookSecret = () => {
       // Mostrar o novo secret em um modal ou toast
       console.log('Novo secret:', data.secret);
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Erro ao regenerar secret');
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : 'Erro ao regenerar secret';
+      toast.error(errorMsg);
     },
   });
 };

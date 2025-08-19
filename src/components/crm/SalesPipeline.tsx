@@ -51,7 +51,7 @@ export const SalesPipeline: React.FC = () => {
       // Calcular estágios do pipeline
       const stages = calculatePipelineStages(opportunitiesData);
       setPipelineStages(stages);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.response?.data?.error || 'Erro ao carregar oportunidades');
       console.error('Erro ao buscar oportunidades:', err);
     } finally {

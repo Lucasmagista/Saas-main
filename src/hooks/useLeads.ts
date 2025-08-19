@@ -17,7 +17,7 @@ export interface Lead {
   assigned_to?: string;
   notes?: string;
   tags: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   last_contact_at?: string;
@@ -35,7 +35,7 @@ export interface CreateLeadData {
   assigned_to?: string;
   notes?: string;
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateLeadData {
@@ -50,7 +50,7 @@ export interface UpdateLeadData {
   assigned_to?: string;
   notes?: string;
   tags?: string[];
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LeadFilters {
@@ -93,8 +93,8 @@ export const useLeads = () => {
       const url = `${API_BASE}/api/leads${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await makeAuthenticatedRequest(url);
       setLeads(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar leads');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar leads');
       console.error('Erro ao buscar leads:', err);
     } finally {
       setLoading(false);
@@ -109,8 +109,8 @@ export const useLeads = () => {
       });
       setLeads(prev => [response.data, ...prev]);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar lead';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao criar lead';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -124,8 +124,8 @@ export const useLeads = () => {
       });
       setLeads(prev => prev.map(lead => lead.id === id ? response.data : lead));
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar lead';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar lead';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -137,8 +137,8 @@ export const useLeads = () => {
         method: 'DELETE',
       });
       setLeads(prev => prev.filter(lead => lead.id !== id));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar lead';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar lead';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -157,8 +157,8 @@ export const useLeads = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar leads em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar leads em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -171,8 +171,8 @@ export const useLeads = () => {
         data: { ids },
       });
       setLeads(prev => prev.filter(lead => !ids.includes(lead.id)));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar leads em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar leads em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -189,8 +189,8 @@ export const useLeads = () => {
       setLeads(prev => [...response.data, ...prev]);
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao importar leads';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao importar leads';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -214,8 +214,8 @@ export const useLeads = () => {
       window.URL.revokeObjectURL(url);
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao exportar leads';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao exportar leads';
       setError(errorMsg);
       throw new Error(errorMsg);
     }

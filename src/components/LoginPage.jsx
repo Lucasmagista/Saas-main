@@ -2,30 +2,29 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 export default function LoginPage() {
-  const { login, loading } = useAuth();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      const result = await login(formData.email, formData.password);
+      await login(formData.email, formData.password);
       setSuccess('Login realizado com sucesso!');
-      
-      // Redireciona após 1 segundo
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1000);
-      
+      // Redirecionamento será feito pelo hook useAuth
     } catch (error) {
-      setError(error.message);
+      setError(error.message || 'Erro ao fazer login');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,20 +131,6 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
-
-        <div className="mt-6">
-          <div className="text-center">
-            <div className="text-sm text-gray-600">
-              <strong>Sistema de Tokens:</strong>
-              <ul className="mt-2 text-xs space-y-1">
-                <li>• Access Token: 1 dia de duração</li>
-                <li>• Refresh Token: 30 dias de duração</li>
-                <li>• Renovação automática quando expira</li>
-                <li>• Logout automático se refresh expirar</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

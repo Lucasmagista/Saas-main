@@ -28,7 +28,18 @@ export const TemplateManager = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<any>(null);
+  const [editingTemplate, setEditingTemplate] = useState<{
+    id: string;
+    name: string;
+    category: string;
+    channel: string;
+    language: string;
+    subject: string;
+    content: string;
+    variables: string[];
+    media_urls: string[];
+    is_active: boolean;
+  } | null>(null);
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     category: '',
@@ -121,7 +132,18 @@ export const TemplateManager = () => {
     }
   };
 
-  const handleEditTemplate = (template: any) => {
+  const handleEditTemplate = (template: {
+    id: string;
+    name: string;
+    category: string;
+    channel: string;
+    language: string;
+    subject: string;
+    content: string;
+    variables: string[];
+    media_urls: string[];
+    is_active: boolean;
+  }) => {
     setEditingTemplate(template);
     setNewTemplate({
       name: template.name,

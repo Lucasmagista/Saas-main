@@ -12,7 +12,7 @@ export interface BotRecord {
   description: string | null;
 }
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3002';
+const API_BASE = (import.meta as { env?: { VITE_API_BASE?: string } }).env?.VITE_API_BASE || 'http://localhost:3002';
 
 // Função para buscar bots com fallback
 async function fetchBots(): Promise<BotRecord[]> {
@@ -113,7 +113,12 @@ export const useBotStatus = (id: string) => {
 
 // Hook para buscar logs de um bot
 export const useBotLogs = (id: string) => {
-  return useQuery<{ logs: any[] }>({
+  return useQuery<{ logs: Array<{
+    id: string;
+    message: string;
+    timestamp: string;
+    type: string;
+  }> }>({
     queryKey: ['botLogs', id],
     queryFn: async () => {
       const response = await fetch(`${API_BASE}/api/bots/${id}/logs`, {

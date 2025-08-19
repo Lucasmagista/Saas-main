@@ -1,182 +1,113 @@
-import { useState, useEffect, createContext, useContext, useMemo } from 'react';
-import { authService } from '@/services/authService';
-import { toast } from '@/hooks/use-toast';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { authService } from '../services/authService';
 
-const AuthContext = createContext({});
+const AuthContext = createContext();
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+  }
+  return context;
+}
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const checkAuth = async () => {
-    console.log('🔍 Verificando autenticação...');
-    
     try {
-      // Força reload dos tokens do localStorage
-      authService.loadTokensFromStorage();
+      setLoading(true);
+      const token = authService.getAccessToken();
       
-      // Verifica se tem tokens válidos
-      if (authService.isAuthenticated()) {
-        try {
-          // Primeiro, verifica se há dados do usuário no localStorage
-          const savedUser = authService.getUser();
-          if (savedUser) {
-            console.log('✅ Usuário encontrado no localStorage:', savedUser.email);
-            setUser(savedUser);
-            setProfile(savedUser);
-            setIsAuthenticated(true);
-            
-            // Busca dados atualizados da API em background (não bloqueia UI)
-            authService.getCurrentUser()
-              .then(userData => {
-                if (userData && userData.email === savedUser.email) {
-                  console.log('✅ Dados do usuário atualizados da API');
-                  setUser(userData);
-                  setProfile(userData);
-                  localStorage.setItem('user', JSON.stringify(userData));
-                }
-              })
-              .catch(error => {
-                console.warn('⚠️ Aviso: Erro ao buscar dados atualizados (usando dados salvos):', error.message);
-                // Não faz logout aqui, apenas usa os dados salvos
-              });
-            
-            return;
-          }
-          
-          // Se não tem dados salvos, busca da API
-          const userData = await authService.getCurrentUser();
-          if (userData) {
-            console.log('✅ Usuário autenticado via API:', userData.email);
-            setUser(userData);
-            setProfile(userData);
-            setIsAuthenticated(true);
-            return;
-          }
-        } catch (userError) {
-          console.warn('❌ Erro ao buscar dados do usuário:', userError.message);
-          
-          // Se o erro for de token expirado, tenta renovar
-          if (userError.message.includes('TOKEN_EXPIRED') || userError.message.includes('401')) {
-            try {
-              console.log('🔄 Tentando renovar tokens...');
-              await authService.refreshTokens();
-              
-              // Tenta buscar dados novamente
-              const userData = await authService.getCurrentUser();
-              if (userData) {
-                console.log('✅ Usuário autenticado após renovação:', userData.email);
-                setUser(userData);
-                setProfile(userData);
-                setIsAuthenticated(true);
-                return;
-              }
-            } catch (refreshError) {
-              console.error('❌ Falha ao renovar tokens:', refreshError.message);
-            }
-          }
-          
-          // Se chegou até aqui, deu erro mesmo - faz logout
-          await authService.logout();
-        }
+      if (!token) {
+        setIsAuthenticated(false);
+        setUser(null);
+        setProfile(null);
+        return;
       }
-      
-      // Se chegou até aqui, não está autenticado
-      console.log('❌ Usuário não autenticado');
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
-      
+
+      // Verifica se o token é válido
+      if (authService.isTokenExpired(token)) {
+        console.log('Token expirado, tentando renovar...');
+        await authService.refreshTokens();
+      }
+
+      // Busca dados do usuário
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+      setIsAuthenticated(true);
+
+      // Busca perfil do usuário
+      try {
+        const profileData = await authService.getUserProfile();
+        setProfile(profileData);
+      } catch (error) {
+        console.warn('Erro ao buscar perfil:', error);
+        setProfile(null);
+      }
+
     } catch (error) {
-      console.error('❌ Erro na verificação de autenticação:', error);
+      console.error('Erro ao verificar autenticação:', error);
+      setIsAuthenticated(false);
       setUser(null);
       setProfile(null);
-      setIsAuthenticated(false);
+      authService.clearTokens();
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (email, password) => {
-    console.log('🔑 Tentando fazer login para:', email);
-    
     try {
       setLoading(true);
+      const response = await authService.login(email, password);
       
-      const result = await authService.login(email, password);
+      setUser(response.user);
+      setIsAuthenticated(true);
       
-      if (result.user) {
-        console.log('✅ Login realizado com sucesso');
-        setUser(result.user);
-        setProfile(result.user);
-        setIsAuthenticated(true);
-        
-        toast({
-          title: "Login realizado com sucesso!",
-          description: `Bem-vindo, ${result.user.full_name || result.user.email}!`,
-        });
-        
-        return { success: true, user: result.user };
-      } else {
-        throw new Error('Falha na autenticação');
+      // Busca perfil do usuário
+      try {
+        const profileData = await authService.getUserProfile();
+        setProfile(profileData);
+      } catch (error) {
+        console.warn('Erro ao buscar perfil:', error);
+        setProfile(null);
       }
+
+      return response;
     } catch (error) {
-      console.error('❌ Erro no login:', error);
-      
-      toast({
-        title: "Erro no login",
-        description: error.message || "Credenciais inválidas",
-        variant: "destructive",
-      });
-      
-      return { success: false, error: error.message };
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    console.log('🚪 Fazendo logout...');
-    
     try {
       await authService.logout();
+    } catch (error) {
+      console.warn('Erro no logout:', error);
+    } finally {
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
-      
-      toast({
-        title: "Logout realizado",
-        description: "Você foi desconectado com sucesso.",
-      });
-    } catch (error) {
-      console.error('❌ Erro no logout:', error);
+      authService.clearTokens();
     }
   };
 
   const logoutAllDevices = async () => {
-    console.log('🚪 Fazendo logout de todos os dispositivos...');
-    
     try {
       await authService.logoutAllDevices();
+    } catch (error) {
+      console.warn('Erro no logout geral:', error);
+    } finally {
       setUser(null);
       setProfile(null);
       setIsAuthenticated(false);
-      
-      toast({
-        title: "Logout realizado",
-        description: "Você foi desconectado de todos os dispositivos.",
-      });
-    } catch (error) {
-      console.error('❌ Erro no logout geral:', error);
-      toast({
-        title: "Erro no logout",
-        description: error.message || "Erro ao desconectar de todos os dispositivos.",
-        variant: "destructive",
-      });
+      authService.clearTokens();
     }
   };
 
@@ -227,7 +158,7 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
+}
 
 /**
  * Hook para fazer requisições autenticadas

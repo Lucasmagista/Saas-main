@@ -37,7 +37,15 @@ export function NotificationCenter() {
   const [activeTab, setActiveTab] = useState("all");
 
   // Lista de notificações carregadas via API. Começa vazia.
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+    priority: string;
+    read: boolean;
+    created_at: string;
+  }>>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
@@ -50,7 +58,7 @@ export function NotificationCenter() {
         const data = await api.get('/api/notifications');
         // Assegura que sempre teremos um array
         setNotifications(Array.isArray(data) ? data : []);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Erro ao carregar notificações', err);
         setNotificationsError('Erro ao carregar notificações');
       } finally {

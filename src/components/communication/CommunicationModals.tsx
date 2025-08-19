@@ -222,7 +222,7 @@ export function WhatsAppTemplatesModal({ open, onOpenChange }: ModalProps) {
     }
   ];
 
-  const useTemplate = (template: any) => {
+  const useTemplate = (template: { name: string; id: string; category: string; message: string; usage: number }) => {
     toast({
       title: "Template aplicado",
       description: `Template "${template.name}" foi inserido na conversa.`,

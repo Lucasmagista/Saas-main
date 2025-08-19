@@ -28,7 +28,16 @@ import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ConversationViewProps {
-  conversation: any;
+  conversation: {
+    id: string;
+    channel: string;
+    status: string;
+    lead?: {
+      name?: string;
+      email?: string;
+      phone?: string;
+    };
+  };
 }
 
 export const ConversationView = ({ conversation }: ConversationViewProps) => {
@@ -113,7 +122,7 @@ export const ConversationView = ({ conversation }: ConversationViewProps) => {
             <Avatar className="w-10 h-10">
               <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${conversation.lead?.name}`} />
               <AvatarFallback>
-                {conversation.lead?.name.charAt(0).toUpperCase()}
+                {conversation.lead?.name?.charAt(0)?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             

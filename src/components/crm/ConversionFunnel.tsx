@@ -102,7 +102,7 @@ export const ConversionFunnel: React.FC = () => {
       ];
 
       setFunnelData(funnel);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.response?.data?.error || 'Erro ao carregar dados do funil');
       console.error('Erro ao calcular funil:', err);
     } finally {

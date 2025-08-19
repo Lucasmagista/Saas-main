@@ -7,14 +7,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:3002';
+const API_BASE = (import.meta as { env?: { VITE_API_BASE?: string } }).env?.VITE_API_BASE || 'http://localhost:3002';
 
 export default function Bots() {
   const { data: bots, isLoading, refetch } = useBotList();
   const { toast } = useToast();
   const [loadingBotId, setLoadingBotId] = useState<string | null>(null);
   const [selectedQr, setSelectedQr] = useState<string | null>(null);
-  const [selectedLogs, setSelectedLogs] = useState<any[]>([]);
+  const [selectedLogs, setSelectedLogs] = useState<Array<{
+    id: string;
+    message: string;
+    timestamp: string;
+    type: string;
+  }>>([]);
   const [showQrDialog, setShowQrDialog] = useState(false);
   const [showLogsDialog, setShowLogsDialog] = useState(false);
 
@@ -30,8 +35,8 @@ export default function Bots() {
         setShowQrDialog(true);
       }
       await refetch();
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Erro', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setLoadingBotId(null);
     }
@@ -45,8 +50,8 @@ export default function Bots() {
       if (!res.ok) throw new Error(data.error || 'Erro ao parar bot');
       toast({ title: 'Bot parado', description: 'Sessão encerrada com sucesso.' });
       await refetch();
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Erro', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
     } finally {
       setLoadingBotId(null);
     }
@@ -59,8 +64,8 @@ export default function Bots() {
       if (!res.ok) throw new Error(data.error || 'QR code não disponível');
       setSelectedQr(data.qrcode);
       setShowQrDialog(true);
-    } catch (err: any) {
-      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } catch (err) {
+      toast({ title: 'Erro', description: err instanceof Error ? err.message : 'Erro desconhecido', variant: 'destructive' });
     }
   };
 
@@ -70,7 +75,7 @@ export default function Bots() {
       const data = await res.json();
       setSelectedLogs(data.logs || []);
       setShowLogsDialog(true);
-    } catch (err: any) {
+    } catch (err) {
       toast({ title: 'Erro', description: 'Não foi possível carregar logs', variant: 'destructive' });
     }
   };

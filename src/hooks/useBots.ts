@@ -1,146 +1,143 @@
 
-import { useState, useEffect } from 'react';
-import { makeAuthenticatedRequest } from '@/utils/api';
+import { useState, useEffect, useCallback } from 'react';
+import { makeAuthenticatedRequest } from '@/lib/api';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001';
-
-export interface Bot {
+interface Bot {
   id: string;
   name: string;
-  description?: string;
-  is_active: boolean;
-  qrcode?: string;
-  session_name?: string;
+  status: 'active' | 'inactive' | 'error';
   created_at: string;
   updated_at: string;
-  created_by?: string;
-  total_messages?: number;
-  last_activity?: string;
+  user_id: string;
+  is_active: boolean;
 }
 
-export interface CreateBotData {
+interface BotSession {
+  session_id: string;
+  bot_id: string;
+  status: 'connected' | 'disconnected' | 'connecting';
+  qr_data?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface BotStats {
+  total: number;
+  active: number;
+  inactive: number;
+  error: number;
+}
+
+interface CreateBotData {
   name: string;
-  description?: string;
-  is_active?: boolean;
+  user_id: string;
 }
 
-export interface UpdateBotData {
+interface UpdateBotData {
   name?: string;
-  description?: string;
   is_active?: boolean;
 }
 
-export const useBots = () => {
+export function useBots() {
   const [bots, setBots] = useState<Bot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBots = async () => {
+  const fetchBots = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const response = await makeAuthenticatedRequest(`${API_BASE}/api/bots`);
-      setBots(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar bots');
-      console.error('Erro ao buscar bots:', err);
+      const data = await makeAuthenticatedRequest('/api/bots', 'GET');
+      setBots(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao buscar bots');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const createBot = async (botData: CreateBotData) => {
+  const createBot = useCallback(async (botData: CreateBotData): Promise<Bot> => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE}/api/bots`, {
-        method: 'POST',
-        data: botData,
-      });
-      setBots(prev => [...prev, response.data]);
-      return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      const data = await makeAuthenticatedRequest('/api/bots', 'POST', botData);
+      setBots(prev => [...prev, data]);
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar bot');
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const updateBot = async (id: string, botData: UpdateBotData) => {
+  const updateBot = useCallback(async (botId: string, botData: UpdateBotData): Promise<Bot> => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE}/api/bots/${id}`, {
-        method: 'PUT',
-        data: botData,
-      });
-      setBots(prev => prev.map(bot => bot.id === id ? response.data : bot));
-      return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      const data = await makeAuthenticatedRequest(`/api/bots/${botId}`, 'PUT', botData);
+      setBots(prev => prev.map(bot => bot.id === botId ? data : bot));
+      return data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar bot');
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const deleteBot = async (id: string) => {
+  const deleteBot = useCallback(async (botId: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
     try {
-      await makeAuthenticatedRequest(`${API_BASE}/api/bots/${id}`, {
-        method: 'DELETE',
-      });
-      setBots(prev => prev.filter(bot => bot.id !== id));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      await makeAuthenticatedRequest(`/api/bots/${botId}`, 'DELETE');
+      setBots(prev => prev.filter(bot => bot.id !== botId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao deletar bot');
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const startBotSession = async (id: string) => {
+  const getBotStats = useCallback(async (): Promise<BotStats> => {
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE}/api/bots/${id}/start`, {
-        method: 'POST',
-      });
-      // Atualizar o bot com o QR code se retornado
-      if (response.data.qrcode) {
-        setBots(prev => prev.map(bot => 
-          bot.id === id ? { ...bot, qrcode: response.data.qrcode, is_active: true } : bot
-        ));
-      }
-      return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao iniciar sessão do bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      const data = await makeAuthenticatedRequest('/api/bots/stats', 'GET');
+      return data;
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Erro ao buscar estatísticas');
     }
-  };
+  }, []);
 
-  const stopBotSession = async (id: string) => {
+  const getBotSessions = useCallback(async (botId: string): Promise<BotSession[]> => {
     try {
-      await makeAuthenticatedRequest(`${API_BASE}/api/bots/${id}/stop`, {
-        method: 'POST',
-      });
-      // Atualizar o bot removendo o QR code
-      setBots(prev => prev.map(bot => 
-        bot.id === id ? { ...bot, qrcode: undefined, is_active: false } : bot
-      ));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao parar sessão do bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      const data = await makeAuthenticatedRequest(`/api/bots/${botId}/sessions`, 'GET');
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Erro ao buscar sessões');
     }
-  };
+  }, []);
 
-  const getBotQrCode = async (id: string) => {
+  const connectBot = useCallback(async (botId: string): Promise<BotSession> => {
     try {
-      const response = await makeAuthenticatedRequest(`${API_BASE}/api/bots/${id}/qrcode`);
-      return response.data.qrcode;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao obter QR code do bot';
-      setError(errorMsg);
-      throw new Error(errorMsg);
+      const data = await makeAuthenticatedRequest(`/api/bots/${botId}/connect`, 'POST');
+      return data;
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Erro ao conectar bot');
     }
-  };
+  }, []);
+
+  const disconnectBot = useCallback(async (botId: string): Promise<void> => {
+    try {
+      await makeAuthenticatedRequest(`/api/bots/${botId}/disconnect`, 'POST');
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : 'Erro ao desconectar bot');
+    }
+  }, []);
 
   useEffect(() => {
     fetchBots();
-  }, []);
+  }, [fetchBots]);
 
   return {
     bots,
@@ -150,8 +147,9 @@ export const useBots = () => {
     createBot,
     updateBot,
     deleteBot,
-    startBotSession,
-    stopBotSession,
-    getBotQrCode,
+    getBotStats,
+    getBotSessions,
+    connectBot,
+    disconnectBot,
   };
-};
+}

@@ -247,7 +247,7 @@ export const RolePermissionsManagement: React.FC<RolePermissionsManagementProps>
       
       // 3. Copia permissões para o novo cargo
       if (origPerms && origPerms.length > 0) {
-        const newPerms = origPerms.map((p: any) => ({
+        const newPerms = origPerms.map((p: { permission_id: string; granted: boolean }) => ({
           role_id: newRole.id,
           permission_id: p.permission_id,
           granted: p.granted,

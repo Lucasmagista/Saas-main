@@ -330,7 +330,7 @@ export const IntegrationsSettings = () => {
   };
 
   // Função para testar conexão com a integração
-  const testConnection = async (integration: any) => {
+  const testConnection = async (integration: { name: string; config: Record<string, string> }) => {
     setTestingConnection(true);
     
     toast({
@@ -404,7 +404,7 @@ export const IntegrationsSettings = () => {
     });
   };
 
-  const testWebhook = (webhook: any) => {
+  const testWebhook = (webhook: { name: string }) => {
     toast({
       title: "Testando webhook",
       description: `Enviando teste para ${webhook.name}...`
@@ -419,7 +419,7 @@ export const IntegrationsSettings = () => {
     }, 2000);
   };
 
-  const configureWebhook = (webhook) => {
+  const configureWebhook = (webhook: { name: string }) => {
     // Implementa configuração do webhook
     toast({
       title: "Configurando webhook",

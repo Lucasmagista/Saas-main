@@ -7,7 +7,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { MessageSquare } from 'lucide-react';
 
 export const ConversationDashboard = () => {
-  const [selectedConversation, setSelectedConversation] = useState<any>(null);
+  const [selectedConversation, setSelectedConversation] = useState<{
+    id: string;
+    channel: string;
+    lead?: {
+      name?: string;
+      phone?: string;
+    };
+    status: string;
+    tags?: string[];
+  } | null>(null);
 
   const renderConversationView = () => {
     if (!selectedConversation) {

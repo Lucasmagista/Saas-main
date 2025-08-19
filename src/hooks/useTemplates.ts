@@ -15,7 +15,7 @@ export interface Template {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateTemplateData {
@@ -25,7 +25,7 @@ export interface CreateTemplateData {
   type?: 'text' | 'media' | 'template';
   variables?: string[];
   is_active?: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateTemplateData {
@@ -35,7 +35,7 @@ export interface UpdateTemplateData {
   type?: 'text' | 'media' | 'template';
   variables?: string[];
   is_active?: boolean;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TemplateFilters {
@@ -68,8 +68,9 @@ export const useTemplates = () => {
       const url = `${API_BASE}/api/templates${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
       const response = await makeAuthenticatedRequest(url);
       setTemplates(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao carregar templates');
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao carregar templates';
+      setError(errorMsg);
       console.error('Erro ao buscar templates:', err);
     } finally {
       setLoading(false);
@@ -84,8 +85,8 @@ export const useTemplates = () => {
       });
       setTemplates(prev => [response.data, ...prev]);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao criar template';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao criar template';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -99,8 +100,8 @@ export const useTemplates = () => {
       });
       setTemplates(prev => prev.map(template => template.id === id ? response.data : template));
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar template';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar template';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -112,8 +113,8 @@ export const useTemplates = () => {
         method: 'DELETE',
       });
       setTemplates(prev => prev.filter(template => template.id !== id));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar template';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar template';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -126,22 +127,22 @@ export const useTemplates = () => {
       });
       setTemplates(prev => [response.data, ...prev]);
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao duplicar template';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao duplicar template';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
   };
 
-  const renderTemplate = async (id: string, variables: Record<string, any>) => {
+  const renderTemplate = async (id: string, variables: Record<string, string | number | boolean>) => {
     try {
       const response = await makeAuthenticatedRequest(`${API_BASE}/api/templates/${id}/render`, {
         method: 'POST',
         data: { variables },
       });
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao renderizar template';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao renderizar template';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -160,8 +161,8 @@ export const useTemplates = () => {
       ));
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao atualizar templates em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao atualizar templates em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -174,8 +175,8 @@ export const useTemplates = () => {
         data: { ids },
       });
       setTemplates(prev => prev.filter(template => !ids.includes(template.id)));
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao deletar templates em lote';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao deletar templates em lote';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -199,8 +200,8 @@ export const useTemplates = () => {
       window.URL.revokeObjectURL(url);
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao exportar templates';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao exportar templates';
       setError(errorMsg);
       throw new Error(errorMsg);
     }
@@ -217,8 +218,8 @@ export const useTemplates = () => {
       setTemplates(prev => [...response.data, ...prev]);
       
       return response.data;
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || 'Erro ao importar templates';
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Erro ao importar templates';
       setError(errorMsg);
       throw new Error(errorMsg);
     }

@@ -80,6 +80,90 @@ export const seedData = async (data: SeedData) => {
   }
 };
 
+/**
+ * Dados de exemplo para popular o sistema
+ */
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  created_at: string;
+}
+
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  position: string;
+  department: string;
+  phone: string;
+  avatar_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  domain: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const seedUsers: User[] = [
+  {
+    id: '1',
+    email: 'admin@example.com',
+    full_name: 'Administrador',
+    role: 'admin',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    email: 'user@example.com',
+    full_name: 'Usuário Padrão',
+    role: 'user',
+    created_at: new Date().toISOString(),
+  },
+];
+
+export const seedProfiles: Profile[] = [
+  {
+    id: '1',
+    email: 'admin@example.com',
+    full_name: 'Administrador do Sistema',
+    position: 'Administrador',
+    department: 'TI',
+    phone: '+55 11 99999-9999',
+    avatar_url: '/avatars/admin.jpg',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    email: 'user@example.com',
+    full_name: 'Usuário Padrão',
+    position: 'Desenvolvedor',
+    department: 'Desenvolvimento',
+    phone: '+55 11 88888-8888',
+    avatar_url: '/avatars/user.jpg',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+export const seedOrganizations: Organization[] = [
+  {
+    id: '1',
+    name: 'Empresa Exemplo',
+    domain: 'example.com',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
 // Dados de exemplo para seed
 export const sampleLeads = [
   {

@@ -49,7 +49,7 @@ export const LeadScoring: React.FC = () => {
       // Calcular distribuição de scores
       const distribution = calculateScoreDistribution(leadsData);
       setScoreDistribution(distribution);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.response?.data?.error || 'Erro ao carregar leads');
       console.error('Erro ao buscar leads:', err);
     } finally {

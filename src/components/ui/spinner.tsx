@@ -1,19 +1,38 @@
-import React from 'react';
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
 
-/**
- * Spinner mostra um ícone de carregamento animado. Pode ser usado no
- * lugar de textos como "Carregando..." em seções da aplicação que
- * dependem de dados assíncronos. Aceita classes adicionais para ajustar
- * tamanho e cor conforme o contexto em que for utilizado.
- */
-interface SpinnerProps extends React.HTMLAttributes<HTMLDivElement> {}
+import { cn } from "@/lib/utils"
 
-const Spinner: React.FC<SpinnerProps> = ({ className, ...props }) => (
-  <div className={cn('flex items-center justify-center', className)} {...props}>
-    <Loader2 className="h-6 w-6 animate-spin text-primary" />
-  </div>
-);
+const spinnerVariants = cva(
+  "inline-block animate-spin rounded-full border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]",
+  {
+    variants: {
+      size: {
+        default: "h-4 w-4",
+        sm: "h-4 w-4",
+        lg: "h-8 w-8",
+        xl: "h-12 w-12",
+      },
+    },
+    defaultVariants: {
+      size: "default",
+    },
+  }
+)
 
-export default Spinner;
+export interface SpinnerProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof spinnerVariants> {}
+
+const Spinner = React.forwardRef<HTMLDivElement, SpinnerProps>(
+  ({ className, size, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(spinnerVariants({ size }), className)}
+      {...props}
+    />
+  )
+)
+Spinner.displayName = "Spinner"
+
+export { Spinner, spinnerVariants }
